@@ -1014,6 +1014,8 @@ export interface ActiveSessionEntry {
     package_allocated_minutes?: number;
     /** Entrada consumindo saldo pré-pago (comprado numa visita anterior, sem plano vendido agora). */
     uses_child_credit?: boolean;
+    /** Entrada pelo saldo de pacote (Porto Seguro) do responsável: sem plano; só o excedente cobra, pela tarifa do pacote. */
+    uses_guardian_package?: boolean;
     child_credit_id?: string | null;
     /** Minutos alocados no check-in — a "duração do plano" da sessão de saldo pré-pago. */
     child_credit_allocated_minutes?: number;
@@ -1482,6 +1484,8 @@ export interface ActiveSessionsRaw {
   childById: Map<string, Record<string, unknown>>;
   /** Saldo de pacote ainda válido, por responsável (minutos). */
   packageBalanceByGuardian: Map<string, number>;
+  /** A consulta do saldo de pacote falhou: o saldo acima é desconhecido, não zero. */
+  packageBalanceFailed?: boolean;
   /**
    * serverNowMs (no momento da busca) - Date.now() (no instante em que a
    * resposta chegou). Somado a todo Date.now() local do cronômetro do
@@ -1524,6 +1528,7 @@ export async function fetchActiveSessionsRaw(unitId: string): Promise<ActiveSess
   const guardianIds = [...new Set(sessions.map((s) => s.guardian_id as string))];
   const assetIds = [...new Set(sessions.map((s) => s.asset_id as string | null).filter((id): id is string => Boolean(id)))];
   const childIds = [...new Set(sessions.map((s) => s.child_id as string))];
+  let packageBalanceFailed = false;
   const [plans, guardians, assets, children, balances] = await Promise.all([
     unwrap<Record<string, unknown>[]>(supabase().from("fa_kiosk_plans").select("*").in("id", planIds)),
     unwrap<Record<string, unknown>[]>(supabase().from("fa_kiosk_guardians").select("id, full_name, phone_e164").in("id", guardianIds)),
@@ -1536,9 +1541,16 @@ export async function fetchActiveSessionsRaw(unitId: string): Promise<ActiveSess
     // sistema justamente na frente do cliente que comprou o pacote.
     unwrap<{ guardian_id: string; remaining_minutes: number }[]>(
       supabase().rpc("fa_kiosk_guardian_package_balance", { p_unit_id: unitId, p_guardian_ids: guardianIds }),
-    ).catch(() => []),
+    ).catch(() => {
+      // Falha na consulta não pode virar "saldo zero" em silêncio: o card
+      // passaria a cobrar plano que o servidor não cobra (e o fechamento
+      // recusaria o pagamento por divergência).
+      packageBalanceFailed = true;
+      return [] as { guardian_id: string; remaining_minutes: number }[];
+    }),
   ]);
   return {
+    packageBalanceFailed,
     sessions,
     planById: new Map(plans.map((p) => [p.id as string, planFromRow(p)])),
     guardianById: new Map(guardians.map((g) => [g.id as string, g])),
@@ -1571,6 +1583,7 @@ export function computeActiveSessionEntries(raw: ActiveSessionsRaw, nowMs: numbe
     const usesHourBank = Boolean(row.uses_hour_bank);
     const usesPackage = Boolean(row.uses_package);
     const usesChildCredit = Boolean(row.uses_child_credit);
+    const usesGuardianPackageMode = Boolean(row.uses_guardian_package);
     // Sessão de banco de horas: não existe plano vendido. O pseudo-plano
     // reusa o mesmo motor de preço — valor 0, duração = saldo alocado no
     // check-in e excedente pela tarifa congelada do crédito de origem.
@@ -1585,6 +1598,7 @@ export function computeActiveSessionEntries(raw: ActiveSessionsRaw, nowMs: numbe
     const originalPlan = raw.planById.get(row.plan_id as string);
     const isBirthdayPlan = Boolean(originalPlan?.birthdayCourtesy);
     const usesGuardianPackage =
+      !usesGuardianPackageMode &&
       !usesHourBank &&
       !usesPackage &&
       !usesChildCredit &&
@@ -1593,7 +1607,22 @@ export function computeActiveSessionEntries(raw: ActiveSessionsRaw, nowMs: numbe
       row.activity === "PLAYGROUND" &&
       guardianPackageBalance > 0;
 
-    const plan: Plan = usesHourBank
+    const plan: Plan = usesGuardianPackageMode
+      ? {
+          // Modo explícito (fa_checkout, ramo uses_guardian_package): o plano
+          // nunca é cobrado; a duração é o saldo e o excedente sai pela tarifa
+          // do pacote congelada no check-in. Se a consulta do saldo falhou, não
+          // dá para afirmar cobrança: mostra sem excedente (o servidor decide).
+          id: `PKG_BALANCE:${row.guardian_id as string}`,
+          activity: "PLAYGROUND",
+          name: "Porto Seguro (Saldo)",
+          valueCents: 0,
+          durationValue: raw.packageBalanceFailed ? 24 * 60 : guardianPackageBalance,
+          durationUnit: "MINUTO",
+          overageCentsPerMinute: (row.guardian_package_overage_cents_per_minute as number | null) ?? 0,
+          color: "#1A3F35",
+        }
+      : usesHourBank
       ? {
           id: "HOUR_BANK",
           activity: row.activity as Plan["activity"],
@@ -1651,7 +1680,7 @@ export function computeActiveSessionEntries(raw: ActiveSessionsRaw, nowMs: numbe
         childName: row.child_name_snapshot as string,
         planId: row.plan_id as string,
         activity: row.activity as "PLAYGROUND" | "CARRINHO",
-        couponDiscountCents: usesGuardianPackage ? 0 : (row.coupon_discount_cents as number),
+        couponDiscountCents: usesGuardianPackage || usesGuardianPackageMode ? 0 : (row.coupon_discount_cents as number),
         couponCode: null,
         couponKind: (row.coupon_kind as "DESCONTO_PCT" | "DESCONTO_VALOR" | null) ?? null,
         couponPct: (row.coupon_pct as number | null) ?? null,
@@ -1659,7 +1688,7 @@ export function computeActiveSessionEntries(raw: ActiveSessionsRaw, nowMs: numbe
         pausedAtMs: (row.paused_at_ms as number | null) ?? null,
         pausedMsTotal: (row.paused_ms_total as number) ?? 0,
         loyaltyCourtesyMinutes: (row.loyalty_courtesy_minutes as number | null) ?? 0,
-        courtesyZeroesPlan: !usesHourBank && !usesPackage && !usesChildCredit && !usesGuardianPackage && !row.rental_kind,
+        courtesyZeroesPlan: !usesHourBank && !usesPackage && !usesChildCredit && !usesGuardianPackage && !usesGuardianPackageMode && !row.rental_kind,
         freeStayKeepsPlanValue: usesPackage,
     };
     const quote = quoteForSession(plan, quoteInput, effectiveNowMs);
@@ -1699,6 +1728,7 @@ export function computeActiveSessionEntries(raw: ActiveSessionsRaw, nowMs: numbe
         package_id: (row.package_id as string | null) ?? undefined,
         package_allocated_minutes: (row.package_allocated_minutes as number | null) ?? undefined,
         uses_child_credit: usesChildCredit,
+        uses_guardian_package: usesGuardianPackageMode,
         child_credit_id: (row.child_credit_id as string | null) ?? undefined,
         child_credit_allocated_minutes: (row.child_credit_allocated_minutes as number | null) ?? undefined,
         rental_kind: (row.rental_kind as "PELUCIA" | null) ?? null,
@@ -2362,6 +2392,8 @@ export const Api = {
     packageId?: string | null;
     /** Entrada consumindo saldo pré-pago comprado numa visita anterior (fa_kiosk_sell_prepaid_credit). */
     childCreditId?: string | null;
+    /** Entrada consumindo o saldo de pacote (Porto Seguro) do responsável: sem plano, sem cupom. */
+    useGuardianPackage?: boolean;
     employeeId: string;
     child: { id?: string; fullName: string; birthDate: string; inclusiveEligible: boolean; inclusiveProofType?: string };
     guardian: { id?: string; fullName: string; cpf: string; phoneE164: string };
@@ -2401,6 +2433,7 @@ export const Api = {
           p_use_hour_bank: body.useHourBank ?? false,
           p_package_id: body.packageId ?? null,
           p_child_credit_id: body.childCreditId ?? null,
+          p_use_guardian_package: body.useGuardianPackage ?? false,
           p_asset_id: body.assetId ?? null,
           p_guardian: { id: body.guardian.id, fullName: body.guardian.fullName, cpf: body.guardian.cpf, phoneE164: body.guardian.phoneE164 },
           p_child: {

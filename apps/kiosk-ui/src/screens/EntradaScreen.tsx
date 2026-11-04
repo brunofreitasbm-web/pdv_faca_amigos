@@ -587,6 +587,9 @@ export function EntradaScreen({
   // Sentinela de uso de saldo de pacote existente (Porto Seguro etc.)
   const PACKAGE_BALANCE = "PACKAGE_BALANCE";
   const usingPackageBalance = planId === PACKAGE_BALANCE;
+  // Com saldo de pacote válido não se vende plano avulso no Playground: o
+  // saldo é consumido primeiro (o servidor também recusa, ver fa_checkin).
+  const saldoPacoteObrigatorio = Boolean(matchedChild) && childPackageMinutes > 0 && activity === "PLAYGROUND";
 
   // "▶ Iniciar" da fila do Painel: reusa o MESMO pickMatch() da busca
   // manual — um único caminho de criação de sessão em vez de duplicar a
@@ -822,11 +825,10 @@ export function EntradaScreen({
         unitId: unit.id,
         activity,
         assetId: assetId ?? undefined,
-        planId: usingHourBank || usingPackage || usingChildCredit
-          ? null
-          : usingPackageBalance
-            ? (plans.find((p) => p.activity === "PLAYGROUND" && p.active)?.id ?? plans[0]?.id ?? planId!)
-            : planId!,
+        // Saldo de pacote é um modo próprio (sem plano): o servidor liga a
+        // sessão ao responsável que tem o saldo e nunca cobra plano avulso.
+        planId: usingHourBank || usingPackage || usingChildCredit || usingPackageBalance ? null : planId!,
+        useGuardianPackage: usingPackageBalance,
         useHourBank: usingHourBank,
         packageId: usingPackage ? selectedPackageId : undefined,
         childCreditId: usingChildCredit ? childCredit?.creditId : undefined,
@@ -932,6 +934,10 @@ export function EntradaScreen({
         setError(isPelucia
           ? "Esta criança já está numa sessão ativa. Finalize a brincadeira antes de alugar a pelúcia."
           : "Esta criança já tem uma sessão ativa (brincadeira ou pelúcia alugada). Finalize-a antes de uma nova entrada.");
+      } else if (msg.includes("SALDO_PACOTE_USAR_PRIMEIRO")) {
+        setError("Esta criança tem saldo de pacote (Porto Seguro). Use o saldo antes de vender plano avulso: escolha \"Usar saldo do pacote\".");
+      } else if (msg.includes("SALDO_PACOTE_SEM_SALDO")) {
+        setError("O saldo de pacote acabou ou venceu. Atualize a tela e escolha outro plano.");
       } else if (msg.includes("ASSET_INDISPONIVEL")) {
         setError(isPelucia ? "Esta pelúcia acabou de ser alugada. Atualize a tela." : msg);
       } else {
@@ -1568,7 +1574,7 @@ export function EntradaScreen({
           {/* Pacotes entram no mesmo grid dos planos, sem seção ou marca
               visual separada — cada um já chegou aqui como um Plan
               sintético (packagePlans). */}
-          {[...regularPlans, ...packagePlans].map((plan) => {
+          {[...(saldoPacoteObrigatorio ? [] : regularPlans), ...packagePlans].map((plan) => {
             const discountInfo = getPlanDiscountedCents(plan.valueCents, couponCode, coupons, plan.id);
             return (
               <Card
