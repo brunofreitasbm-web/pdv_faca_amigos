@@ -66,3 +66,56 @@ describe("computeActiveSessionEntries com saldo de pacote (Porto Seguro)", () =>
     expect(entry.quote.totalCents).toBe(1500);
   });
 });
+
+describe("computeActiveSessionEntries no modo explícito de saldo (uses_guardian_package)", () => {
+  const base = {
+    id: "sess-gp",
+    child_id: "child-1",
+    child_name_snapshot: "MATEUS SILVA",
+    guardian_id: "guardian-1",
+    activity: "PLAYGROUND",
+    plan_id: null,
+    checkin_at_ms: 100000,
+    paused_ms_total: 0,
+    wristband_code: "WB2",
+    uses_hour_bank: false,
+    uses_package: false,
+    uses_child_credit: false,
+    uses_guardian_package: true,
+    guardian_package_overage_cents_per_minute: 150,
+    // Cupom gravado por engano no check-in nunca pode abater/cobrar aqui.
+    coupon_discount_cents: 5000,
+    loyalty_courtesy_minutes: 0,
+  };
+  const mkRaw = (over: Partial<ActiveSessionsRaw> = {}): ActiveSessionsRaw => ({
+    sessions: [base],
+    planById: new Map(),
+    guardianById: new Map([["guardian-1", { id: "guardian-1", full_name: "RUBIA SILVA" }]]),
+    assetById: new Map(),
+    childById: new Map([["child-1", { id: "child-1", birth_date: "2020-01-01", inclusive_eligible: false }]]),
+    packageBalanceByGuardian: new Map([["guardian-1", 523]]),
+    clockOffsetMs: 0,
+    ...over,
+  });
+
+  it("não cobra nada dentro do saldo, sem plano e ignorando cupom gravado", () => {
+    const entry = computeActiveSessionEntries(mkRaw(), 100000 + 41 * 60 * 1000)[0]!;
+    expect(entry.quote.totalCents).toBe(0);
+    expect(entry.checkoutQuote?.totalCents).toBe(0);
+    expect(entry.session.uses_guardian_package).toBe(true);
+  });
+
+  it("excedente sai pela tarifa do pacote (1 min de tolerância)", () => {
+    // 528 min com saldo de 523: 5 min de excedente - 1 de tolerância = 4 min * 150
+    const entry = computeActiveSessionEntries(mkRaw(), 100000 + 528 * 60 * 1000)[0]!;
+    expect(entry.quote.totalCents).toBe(4 * 150);
+  });
+
+  it("falha na consulta do saldo não vira cobrança de plano", () => {
+    const entry = computeActiveSessionEntries(
+      mkRaw({ packageBalanceByGuardian: new Map(), packageBalanceFailed: true }),
+      100000 + 41 * 60 * 1000,
+    )[0]!;
+    expect(entry.quote.totalCents).toBe(0);
+  });
+});
