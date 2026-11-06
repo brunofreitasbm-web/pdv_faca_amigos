@@ -1,0 +1,26 @@
+name: Drift de migrations
+
+# Avisa (workflow vermelho + e-mail do GitHub) quando existe migration no
+# repositório que não foi aplicada no banco real. Exige o secret
+# SUPABASE_ACCESS_TOKEN (token pessoal do Supabase, só leitura de projeto).
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  push:
+    branches: [main]
+    paths: ["supabase/migrations/**", "scripts/check-migration-drift.mjs"]
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: node --test scripts/check-migration-drift.test.mjs
+      - name: Checar drift
+        run: node scripts/check-migration-drift.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
