@@ -146,7 +146,11 @@ function authenticateShoppingRequest(ctx: AppContext, req: FastifyRequest, reply
   }
 
   if (token.includes("playground") || token.includes("loja")) {
-    const playgroundUnit = units.find((u) => u.kind === "LOJA" || u.name.toLowerCase().includes("playground"));
+    // Grão-Pará também é LOJA/Playground: a chave "playground" genérica é a do Parque Shopping.
+    const isGp = (n: string) => /gr[ãa]o/i.test(n);
+    const playgroundUnit =
+      units.find((u) => !isGp(u.name) && (u.kind === "LOJA" || u.name.toLowerCase().includes("playground"))) ??
+      units.find((u) => u.kind === "LOJA" || u.name.toLowerCase().includes("playground"));
     return playgroundUnit ? playgroundUnit.id : units[0]!.id;
   }
 
