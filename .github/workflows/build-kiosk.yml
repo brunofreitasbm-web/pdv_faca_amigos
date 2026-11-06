@@ -92,6 +92,12 @@ jobs:
       - name: Testes do kiosk
         run: pnpm --filter @facaamigos/kiosk test
 
+      # Regras de preço/saldo (pacote Porto Seguro, saldo pré-pago, pausa) vivem
+      # em domain e kiosk-ui. Sem este passo uma regressão de cobrança chega ao
+      # balcão sem que nenhum teste a barre.
+      - name: Testes de cobrança (domain e kiosk-ui)
+        run: pnpm --filter @facaamigos/domain --filter @facaamigos/kiosk-ui test
+
       # NÃO cria apps/kiosk/.env. Esse arquivo é embutido no instalador
       # (extraResources), então um .env aqui faria a chave voltar a viajar
       # dentro de cada instalador. Cada terminal recebe a sua em
