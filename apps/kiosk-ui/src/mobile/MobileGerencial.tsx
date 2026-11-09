@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { BrandLoader } from "@facaamigos/ui";
 import { useBackHandler } from "../hooks/useBackHandler.js";
 import type { Unit } from "../api/client.js";
-import { GerencialApp } from "../screens/gerencial/GerencialApp.js";
+import { GerencialApp } from "../lazyScreens.js";
 import { MobileGerencialHome } from "./MobileGerencialHome.js";
 import { MobileUnitDetail } from "./MobileUnitDetail.js";
 import { MobileTabBar, TabIcons } from "./MobileNav.js";
@@ -34,7 +35,11 @@ export function MobileGerencial({ units, onExit, onLogout }: { units: Unit[]; on
   // o que fazia o Owner perder o lugar). Quem quer mesmo trocar de
   // unidade usa a aba "Atender".
   if (view.kind === "FULL") {
-    return <GerencialApp onExit={() => setView({ kind: "HOME" })} onLogout={onLogout} />;
+    return (
+      <Suspense fallback={<BrandLoader />}>
+        <GerencialApp onExit={() => setView({ kind: "HOME" })} onLogout={onLogout} />
+      </Suspense>
+    );
   }
 
   // Abas principais do Owner. "Operar" é a única que sai do Gerencial: leva

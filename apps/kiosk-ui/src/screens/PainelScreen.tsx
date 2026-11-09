@@ -1,5 +1,5 @@
 import { startVisiblePolling } from "../lib/visiblePolling.js";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Card, Button, Select, StatusBadge, Badge, Tag, AsyncState, Modal, PrinterIcon, ShoppingCartIcon, PlusIcon, SignOutIcon, XIcon, HelpText, RevealPin, AutismRibbonIcon, ClockIcon, ArrowClockwiseIcon } from "@facaamigos/ui";
 import { Api, businessDateFor } from "../api/client.js";
 import type { ActiveSessionEntry, Plan, Package, Asset, BonusRule, VipFlag } from "../api/client.js";
@@ -19,12 +19,10 @@ import { SessionTimelineModal } from "../components/SessionTimelineModal.js";
 import { EditRegistrationModal } from "../components/EditRegistrationModal.js";
 import { getFriendlyWristbandCode } from "@facaamigos/domain";
 import { formatAge, formatElapsed, money } from "../format.js";
-import { EntradaScreen } from "./EntradaScreen.js";
 import type { PreCheckinPrefill } from "./EntradaScreen.js";
+import { EntradaScreen, SaidaScreen, PdvScreen } from "../lazyScreens.js";
 import type { PrepaidCreditQueueItem } from "../api/client.js";
 import { formatPlanoHoras } from "../contract/contractTemplate.js";
-import { SaidaScreen } from "./SaidaScreen.js";
-import { PdvScreen } from "./PdvScreen.js";
 import { WristbandQRCode } from "../components/WristbandQRCode.js";
 import { Emoji3D, renderEmoji } from "../components/Emoji3D.js";
 import { MetaDoDia } from "../components/MetaDoDia.js";
@@ -1449,6 +1447,7 @@ export function PainelScreen() {
           padding="0"
           zIndex={150}
         >
+          <Suspense fallback={null}>
           <EntradaScreen
             onSuccess={() => { refetchActiveSessions(); refetchPrepaidCreditQueue(); }}
             prefill={preCheckinPrefill}
@@ -1459,18 +1458,23 @@ export function PainelScreen() {
             prepaidPrefill={prepaidPrefill}
             onPrepaidPrefillConsumed={() => setPrepaidPrefill(null)}
           />
+          </Suspense>
         </Modal>
       )}
 
       {pdvOpen && (
         <Modal onClose={() => setPdvOpen(false)} ariaLabel="PDV" maxWidth="1100px" padding="0" zIndex={150}>
-          <PdvScreen />
+          <Suspense fallback={null}>
+            <PdvScreen />
+          </Suspense>
         </Modal>
       )}
 
       {saidaOpen && (
         <Modal onClose={() => setSaidaOpen(false)} ariaLabel="Saída" maxWidth="600px" padding="0" zIndex={150}>
-          <SaidaScreen entriesOverride={entries} />
+          <Suspense fallback={null}>
+            <SaidaScreen entriesOverride={entries} />
+          </Suspense>
         </Modal>
       )}
 

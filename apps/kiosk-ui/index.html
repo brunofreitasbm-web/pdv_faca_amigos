@@ -1,13 +1,24 @@
 <!doctype html>
 <html lang="pt-BR">
   <head>
-    <!-- Microsoft Clarity -->
+    <!-- Microsoft Clarity: mesmos hosts/condições de antes, mas só depois do
+         `load` e em tempo ocioso. Injetado no <head> logo no início, ele
+         disputava rede e CPU com a montagem inicial (e no Electron observa o
+         DOM inteiro durante a abertura). -->
     <script type="text/javascript">
-        if (location.hostname === "app.institutofacaamigos.com.br" || location.hostname === "kiosk-ui.vercel.app" || navigator.userAgent.indexOf("Electron") > -1) (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "yr8qq61339");
+        if (location.hostname === "app.institutofacaamigos.com.br" || location.hostname === "kiosk-ui.vercel.app" || navigator.userAgent.indexOf("Electron") > -1) {
+          window.addEventListener("load", function () {
+            var start = function () {
+              (function(c,l,a,r,i,t,y){
+                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+              })(window, document, "clarity", "script", "yr8qq61339");
+            };
+            if (window.requestIdleCallback) window.requestIdleCallback(start, { timeout: 5000 });
+            else setTimeout(start, 2000);
+          });
+        }
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -21,12 +32,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="FaçaAmigos" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Loader estático: aparece no primeiro quadro, antes do JS. O React o
+         substitui ao montar (createRoot limpa o conteúdo do #root). -->
+    <div id="root"><div role="status" aria-live="polite" style="display:flex;min-height:100dvh;align-items:center;justify-content:center;font:700 22px/1 'Segoe UI',system-ui,sans-serif;color:#F0196B">FaçaAmigos</div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

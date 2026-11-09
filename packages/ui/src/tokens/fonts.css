@@ -1,7 +1,7 @@
-/* FaçaAmigos — Web Font Imports */
-/* Substitution note: Using Google Fonts approximations.
-   Fredoka One → closest match to the bubbly rounded display type seen in marketing materials.
-   Nunito → matches the clean rounded sans used in logo and UI labels.
-   Please provide .ttf/.otf files if the actual brand fonts differ. */
-
-@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700;800;900&display=swap');
+/* FaçaAmigos — fontes.
+   As fontes são empacotadas localmente (apps/kiosk-ui/src/fonts.ts, via
+   @fontsource): sem requisição ao Google Fonts, sem bloquear a primeira
+   pintura e funcionando offline no Electron.
+   Nomes das famílias: 'Nunito Variable' (400-900), 'Fredoka One' e
+   'Fredoka Variable' (500-700). Não reintroduzir @import de fonts.googleapis.com
+   aqui: ele vira uma cadeia CSS -> CSS -> woff2 antes do primeiro render. */
