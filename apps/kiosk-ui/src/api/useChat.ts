@@ -1,3 +1,4 @@
+import { startVisiblePolling } from "../lib/visiblePolling.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase/client.js";
 import { assertValidImageUpload, prepareUpload } from "../lib/imageCompression.js";
@@ -13,7 +14,10 @@ const BUCKET = "fa-chat-attachments";
 const PAGE = 100;
 // Rede de segurança do Realtime: tablet de loja perde conexão; sem isto a resposta
 // do dono só apareceria ao recarregar.
-const POLL_MS = 45_000;
+// Rede de segurança do Realtime (que já entrega mensagens novas na hora).
+// 45 s -> 2 min, e só com a janela visível; ao voltar a ficar visível o
+// listener de visibilitychange abaixo recarrega na hora.
+const POLL_MS = 120_000;
 
 interface Options {
   enabled: boolean;
@@ -121,7 +125,9 @@ export function useChat({ enabled, panelOpen, getContext }: Options) {
         },
       )
       .subscribe();
-    const timer = window.setInterval(sync, POLL_MS);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") sync();
+    }, POLL_MS);
     const onVisible = () => {
       if (document.visibilityState === "visible") sync();
     };
@@ -220,11 +226,13 @@ export function useChatUnreadHint(): number {
         .then((v) => alive && setN(Number(v) || 0))
         .catch(() => {});
     };
-    run();
-    const t = window.setInterval(run, 30_000);
+    // Sem login não há Realtime aqui: o poll é o único mecanismo. Mantém a
+    // ideia (o selo aparece em até 1 min) mas pausa com a janela escondida;
+    // antes consultava a cada 30 s a noite toda, com o terminal ocioso.
+    const stop = startVisiblePolling(run, 60_000);
     return () => {
       alive = false;
-      window.clearInterval(t);
+      stop();
     };
   }, []);
   return n;

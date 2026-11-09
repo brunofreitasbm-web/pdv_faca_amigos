@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase/client.js";
 import type { Capability, Role } from "./capabilities.js";
 import { getDefaultCapabilitiesForRole } from "./capabilities.js";
+import { createCapabilitiesSync } from "./capabilitiesSync.js";
 
 /**
  * Capacidades do colaborador logado, lidas da view `fa_kiosk_my_capabilities`.
@@ -69,38 +70,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [capabilities, setCapabilities] = useState<ReadonlySet<Capability>>(new Set());
   const [loading, setLoading] = useState(true);
 
+  // Quem decide quando consultar de fato é o capabilitiesSync (ver o arquivo
+  // para as regras). Antes, TODO evento de auth ligava `loading` e refazia a
+  // consulta, e `loading` desmonta a tela atual (RequireCapability): a
+  // renovação de token, a cada ~1 h, e o SIGNED_IN ao voltar para a aba
+  // reiniciavam todas as consultas da tela aberta e recriavam os canais Realtime.
+  const syncRef = useRef(
+    createCapabilitiesSync<ReadonlySet<Capability>>({
+      fetchCapabilities,
+      setCapabilities,
+      setLoading,
+      empty: () => new Set<Capability>(),
+    }),
+  );
+
   const refresh = useCallback(async () => {
     const { data } = await supabase().auth.getSession();
-    if (!data.session) {
-      setCapabilities(new Set());
-      setLoading(false);
-      return;
-    }
-    setCapabilities(await fetchCapabilities());
-    setLoading(false);
+    await syncRef.current.sync(data.session?.user.id ?? null, { force: true });
   }, []);
 
   useEffect(() => {
+    const sync = syncRef.current.sync;
     // Reagir a onAuthStateChange (e não só carregar uma vez) é o que faz
     // trocar de colaborador no terminal trocar de fato as permissões — sem
     // isso, o Owner que saiu deixaria o menu Configurações aberto para o
-    // Operador que entrou depois.
-    const { data: subscription } = supabase().auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        setCapabilities(new Set());
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      void fetchCapabilities().then((caps) => {
-        setCapabilities(caps);
-        setLoading(false);
-      });
+    // Operador que entrou depois. O mesmo usuário NÃO dispara nova consulta
+    // com `loading`; só TOKEN_REFRESHED revalida, em segundo plano, para
+    // continuar enxergando mudança de papel feita por um admin.
+    const { data: subscription } = supabase().auth.onAuthStateChange((event, session) => {
+      void sync(session?.user.id ?? null, { force: event === "TOKEN_REFRESHED" });
     });
 
-    void refresh();
+    // Abertura: getSession e o INITIAL_SESSION do listener chegam quase juntos
+    // para o mesmo usuário; o sync reaproveita a consulta em andamento.
+    void supabase()
+      .auth.getSession()
+      .then(({ data }) => sync(data.session?.user.id ?? null));
     return () => subscription.subscription.unsubscribe();
-  }, [refresh]);
+  }, []);
 
   const value = useMemo<AuthValue>(
     () => ({

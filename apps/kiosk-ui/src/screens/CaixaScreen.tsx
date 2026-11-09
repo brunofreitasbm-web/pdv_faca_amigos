@@ -1,3 +1,4 @@
+import { startVisiblePolling } from "../lib/visiblePolling.js";
 import { useEffect, useState } from "react";
 import { Button, Card, Input, HelpText, Modal, Tag } from "@facaamigos/ui";
 import { formatCpf, isValidCpf } from "@facaamigos/domain";
@@ -72,17 +73,10 @@ export function CaixaScreen() {
   }, [unit?.id]);
 
   async function loadNfceDocsForSales(salesList: ShiftSale[]) {
-    const pdvSales = salesList.filter((s) => s.kind === "PDV");
-    if (pdvSales.length === 0) return;
-    const docs: Record<string, FiscalDoc | null> = {};
-    await Promise.all(
-      pdvSales.map(async (s) => {
-        const doc = await Api.fiscalDocByOrder(s.orderId).catch(() => null);
-        if (doc) {
-          docs[s.orderId] = doc;
-        }
-      })
-    );
+    const orderIds = salesList.filter((s) => s.kind === "PDV").map((s) => s.orderId);
+    if (orderIds.length === 0) return;
+    // Uma consulta em lote em vez de uma por venda (ver Api.fiscalDocsByOrders).
+    const docs = await Api.fiscalDocsByOrders(orderIds, "NFCE").catch(() => ({}) as Record<string, FiscalDoc>);
     setNfceDocsMap((prev) => ({ ...prev, ...docs }));
   }
 
@@ -117,17 +111,9 @@ export function CaixaScreen() {
   }
 
   async function loadNfseDocsForSales(salesList: ShiftSale[]) {
-    const sessionSales = salesList.filter((s) => s.kind === "SESSAO");
-    if (sessionSales.length === 0) return;
-    const docs: Record<string, FiscalDoc | null> = {};
-    await Promise.all(
-      sessionSales.map(async (s) => {
-        const doc = await Api.nfseDocByOrder(s.orderId).catch(() => null);
-        if (doc) {
-          docs[s.orderId] = doc;
-        }
-      })
-    );
+    const orderIds = salesList.filter((s) => s.kind === "SESSAO").map((s) => s.orderId);
+    if (orderIds.length === 0) return;
+    const docs = await Api.fiscalDocsByOrders(orderIds, "NFSE").catch(() => ({}) as Record<string, FiscalDoc>);
     setNfseDocsMap((prev) => ({ ...prev, ...docs }));
   }
 
@@ -422,10 +408,12 @@ export function CaixaScreen() {
     }
   }
 
+  // Intervalo de 5 s -> 15 s e parado com a janela escondida: cada ciclo são
+  // ~7 consultas em série. Ações feitas NESTA tela já chamam refresh() direto
+  // (abertura, sangria, fechamento...); o intervalo só serve para enxergar
+  // vendas feitas em outro terminal da unidade, que passam a aparecer em até 15 s.
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 5000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(() => void refresh(), 15_000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unit]);
 
