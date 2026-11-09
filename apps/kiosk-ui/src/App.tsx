@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import type { ComponentType, ReactNode } from "react";
 import {
   Button,
   BrandLockup,
@@ -26,26 +26,29 @@ import { useAuth } from "./auth/AuthContext.js";
 import { RequireCapability } from "./auth/RequireCapability.js";
 import { SCREEN_CAPABILITY, type Screen } from "./auth/screens.js";
 import { ROLE_LABEL } from "./auth/capabilities.js";
+import {
+  OnboardingInviteScreen,
+  GeneralOnboardingScreen,
+  GeneralPjOnboardingScreen,
+  AcompanharScreen,
+  AcessoRapidoScreen,
+  EntradaScreen,
+  SaidaScreen,
+  RelatorioSessaoScreen,
+  PdvScreen,
+  CaixaScreen,
+  MinhaBonificacaoScreen,
+  RelatorioScreen,
+  ConfiguracoesScreen,
+  AniversariosScreen,
+  GerencialApp,
+  TapReturnScreen,
+  prefetchHotScreens,
+} from "./lazyScreens.js";
 import { LoginScreen } from "./screens/LoginScreen.js";
 import { SelectModuleScreen } from "./screens/SelectModuleScreen.js";
-import { OnboardingInviteScreen } from "./screens/OnboardingInviteScreen.js";
-import { GeneralOnboardingScreen } from "./screens/GeneralOnboardingScreen.js";
-import { GeneralPjOnboardingScreen } from "./screens/GeneralPjOnboardingScreen.js";
-import { AcompanharScreen } from "./screens/AcompanharScreen.js";
-import { AcessoRapidoScreen } from "./screens/AcessoRapidoScreen.js";
-import { EntradaScreen } from "./screens/EntradaScreen.js";
-import { SaidaScreen } from "./screens/SaidaScreen.js";
 import { PainelScreen } from "./screens/PainelScreen.js";
-import { RelatorioSessaoScreen } from "./screens/RelatorioSessaoScreen.js";
 import { PendingSessionReportsBadge } from "./components/session-report/PendingSessionReportsBadge.js";
-import { PdvScreen } from "./screens/PdvScreen.js";
-import { CaixaScreen } from "./screens/CaixaScreen.js";
-import { MinhaBonificacaoScreen } from "./screens/MinhaBonificacaoScreen.js";
-import { RelatorioScreen } from "./screens/RelatorioScreen.js";
-import { ConfiguracoesScreen } from "./screens/ConfiguracoesScreen.js";
-import { AniversariosScreen } from "./screens/AniversariosScreen.js";
-import { GerencialApp } from "./screens/gerencial/GerencialApp.js";
-import { TapReturnScreen } from "./screens/TapReturnScreen.js";
 import { parseTapReturn } from "./lib/infinitepayTap.js";
 import { ConnectDeviceModal } from "./components/ConnectDeviceModal.js";
 import { ConnectionStatusChip } from "./components/ConnectionStatusChip.js";
@@ -81,7 +84,7 @@ const SCREENS: ReadonlyArray<{ value: Screen; label: string; help: string; icon:
   { value: "CONFIGURACOES", label: "Configurações", help: "Ajustar planos, produtos, cupons, colaboradores, unidade, dados fiscais e termos de uso", icon: <GearIcon /> },
 ];
 
-const SCREEN_COMPONENTS: Record<Screen, () => ReactElement | null> = {
+const SCREEN_COMPONENTS: Record<Screen, ComponentType> = {
   ENTRADA: EntradaScreen,
   SAIDA: SaidaScreen,
   PAINEL: PainelScreen,
@@ -108,6 +111,12 @@ export function App() {
   // Enquanto for null, quem manda no celular é a casca.
   const mobile = useMobileShell();
   const [mobileEscape, setMobileEscape] = useState<Screen | null>(null);
+
+  // Com o operador logado e o app interativo, baixa em segundo plano os chunks
+  // das telas quentes (Entrada, Saída, PDV, Caixa) para o primeiro uso não esperar.
+  useEffect(() => {
+    if (employee) prefetchHotScreens();
+  }, [employee]);
 
   // Se for colaborador com perfil Owner e tiver as notificações ativas no dispositivo (localStorage),
   // revalida a inscrição Web Push com o Supabase automaticamente ao carregar o aplicativo.
@@ -300,7 +309,7 @@ export function App() {
   const inviteParam = new URLSearchParams(window.location.search).get("convite");
   if (inviteParam) {
     const [inviteId, token] = inviteParam.split(".");
-    if (inviteId && token) return <OnboardingInviteScreen inviteId={inviteId} token={token} />;
+    if (inviteId && token) return <Suspense fallback={<BrandLoader />}><OnboardingInviteScreen inviteId={inviteId} token={token} /></Suspense>;
   }
 
   // Link Geral de auto-cadastro de estagiário (?cadastro-estagiario=<unitId>.<token>):
@@ -310,14 +319,14 @@ export function App() {
   const cadastroEstagiarioParam = new URLSearchParams(window.location.search).get("cadastro-estagiario");
   if (cadastroEstagiarioParam) {
     const [unitId, token] = cadastroEstagiarioParam.split(".");
-    if (unitId && token) return <GeneralOnboardingScreen unitId={unitId} token={token} />;
+    if (unitId && token) return <Suspense fallback={<BrandLoader />}><GeneralOnboardingScreen unitId={unitId} token={token} /></Suspense>;
   }
 
   // Link Geral de auto-cadastro de prestador PJ (?cadastro-pj=<unitId>.<token>):
   const cadastroPjParam = new URLSearchParams(window.location.search).get("cadastro-pj");
   if (cadastroPjParam) {
     const [unitId, token] = cadastroPjParam.split(".");
-    if (unitId && token) return <GeneralPjOnboardingScreen unitId={unitId} token={token} />;
+    if (unitId && token) return <Suspense fallback={<BrandLoader />}><GeneralPjOnboardingScreen unitId={unitId} token={token} /></Suspense>;
   }
 
   // Painel do responsável (?acompanhar=<access_code>): quem abre é o pai/mãe
@@ -326,7 +335,7 @@ export function App() {
   // qualquer checagem de sessão salva.
   const acompanharParam = new URLSearchParams(window.location.search).get("acompanhar");
   if (acompanharParam) {
-    return <AcompanharScreen code={acompanharParam} />;
+    return <Suspense fallback={<BrandLoader />}><AcompanharScreen code={acompanharParam} /></Suspense>;
   }
 
   // QR Code de Acesso Rápido (?acesso-rapido=<unit_id>): cartaz fixo na
@@ -335,7 +344,7 @@ export function App() {
   // checagem de sessão salva.
   const acessoRapidoParam = new URLSearchParams(window.location.search).get("acesso-rapido");
   if (acessoRapidoParam) {
-    return <AcessoRapidoScreen unitId={acessoRapidoParam} />;
+    return <Suspense fallback={<BrandLoader />}><AcessoRapidoScreen unitId={acessoRapidoParam} /></Suspense>;
   }
 
 
@@ -368,7 +377,7 @@ export function App() {
       if (mobile.active) {
         return <MobileGerencial units={units} onExit={() => setGerencial(false)} onLogout={handleLogout} />;
       }
-      return <GerencialApp onExit={() => setGerencial(false)} onLogout={handleLogout} />;
+      return <Suspense fallback={<BrandLoader />}><GerencialApp onExit={() => setGerencial(false)} onLogout={handleLogout} /></Suspense>;
     }
   }
 
@@ -384,7 +393,7 @@ export function App() {
   // uma cobrança pendente de confirmação.
   const tapReturn = parseTapReturn(window.location.search);
   if (tapReturn) {
-    return <TapReturnScreen search={window.location.search} onDone={() => navigateToScreen("PAINEL")} />;
+    return <Suspense fallback={<BrandLoader />}><TapReturnScreen search={window.location.search} onDone={() => navigateToScreen("PAINEL")} /></Suspense>;
   }
 
   // Celular: a casca mobile é a porta de entrada. Só sai dela quando o
@@ -426,7 +435,9 @@ export function App() {
     return (
       <MobileScreenFrame title={MOBILE_FRAMED_TITLE[mobileEscape]!} backLabel={mobileReturnLabel()} onBack={() => setMobileEscape(null)}>
         <RequireCapability capability={SCREEN_CAPABILITY[mobileEscape]}>
-          <FramedComponent />
+          <Suspense fallback={<BrandLoader />}>
+            <FramedComponent />
+          </Suspense>
         </RequireCapability>
       </MobileScreenFrame>
     );
@@ -622,7 +633,9 @@ export function App() {
       <main className="kiosk-main" style={{ flex: 1, minHeight: 0, paddingBottom: "var(--install-banner-height, 0px)" }} {...swipeHandlers}>
         {ScreenComponent && (
           <RequireCapability capability={SCREEN_CAPABILITY[screen]}>
-            <ScreenComponent />
+            <Suspense fallback={<BrandLoader />}>
+              <ScreenComponent />
+            </Suspense>
           </RequireCapability>
         )}
       </main>

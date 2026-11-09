@@ -17,7 +17,14 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const kioskDir = join(root, "apps", "kiosk");
 const releaseDir = join(kioskDir, "release");
 const BUCKET = "kiosk-updates";
-const PREFIX = "kiosk";
+// FACAAMIGOS_RELEASE_PREFIX permite publicar num prefixo de teste (ex.:
+// "kiosk-piloto") e apontar UM terminal para ele via FACAAMIGOS_UPDATE_URL,
+// sem tocar no feed dos terminais em operação.
+const PREFIX = process.env.FACAAMIGOS_RELEASE_PREFIX?.trim() || "kiosk";
+// Quantos .blockmap anteriores manter no bucket (cada um tem poucas centenas
+// de KB). O electron-updater, no download diferencial, busca o blockmap da
+// versão que o terminal tem instalada; sem ele cai no download completo.
+const BLOCKMAPS_A_MANTER = 30;
 
 function run(cmd, cwd) {
   console.log(`\n$ ${cmd}`);
@@ -83,8 +90,15 @@ async function storageFetch(path, options, retries = 3) {
   }
 }
 
-// 1. Build do instalador (workspace + kiosk-ui + ícones + electron-builder)
-run("pnpm dist:kiosk");
+// 1. Build do instalador (workspace + kiosk-ui + ícones + electron-builder).
+// No CI o build já foi feito (e testado) no job Windows anterior e o artifact
+// foi baixado para apps/kiosk/release: --skip-build publica exatamente esse
+// binário em vez de refazer tudo. Uso local sem a flag continua igual.
+if (process.argv.includes("--skip-build")) {
+  console.log("\n--skip-build: usando o instalador já gerado em apps/kiosk/release");
+} else {
+  run("pnpm dist:kiosk");
+}
 
 // 1b. Mesma guarda que o CI faz (build-kiosk.yml), porque o build LOCAL é
 // o caso perigoso: aqui apps/kiosk/.env existe de verdade, e o destino do
@@ -111,17 +125,37 @@ if (!version) throw new Error("Não consegui extrair a versão de latest.yml");
 console.log(`\nVersão a publicar: ${version}`);
 
 // 3. Remove instaladores de versões antigas do bucket (o electron-updater só
-// precisa do mais recente; deixar os antigos só desperdiça espaço).
+// precisa do mais recente; deixar os antigos só desperdiça espaço). Os
+// .exe.blockmap são pequenos e NÃO são apagados de imediato: o download
+// diferencial precisa do blockmap da versão instalada no terminal (ver
+// autoUpdater.ts). Mantemos os mais recentes e apagamos só o excedente.
 console.log("\nListando arquivos antigos no bucket...");
 const listRes = await storageFetch(`/object/list/${BUCKET}`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ prefix: `${PREFIX}/`, limit: 100 }),
+  body: JSON.stringify({ prefix: `${PREFIX}/`, limit: 200 }),
 });
 const existing = await listRes.json();
-const staleFiles = existing
-  .map((f) => f.name)
-  .filter((name) => name.endsWith(".exe") || name.endsWith(".exe.blockmap"));
+const nomes = existing.map((f) => f.name);
+
+const versaoDe = (name) => {
+  const m = name.match(/(\d+)\.(\d+)\.(\d+)\.exe\.blockmap$/);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+};
+const comparaVersao = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+
+const exesAntigos = nomes.filter((name) => name.endsWith(".exe"));
+const blockmaps = nomes
+  .filter((name) => name.endsWith(".exe.blockmap") && versaoDe(name))
+  // a versão que estamos publicando será reenviada (x-upsert), não conta como "antiga"
+  .filter((name) => name !== `FacaAmigos-Setup-${version}.exe.blockmap`)
+  .sort((a, b) => comparaVersao(versaoDe(b), versaoDe(a))); // mais novos primeiro
+// Sobra 1 vaga para o blockmap que vai ser enviado agora.
+const blockmapsExcedentes = blockmaps.slice(Math.max(BLOCKMAPS_A_MANTER - 1, 0));
+// Blockmap sem versão reconhecível no nome: comportamento antigo (apaga).
+const blockmapsSemVersao = nomes.filter((name) => name.endsWith(".exe.blockmap") && !versaoDe(name));
+
+const staleFiles = [...exesAntigos, ...blockmapsExcedentes, ...blockmapsSemVersao];
 if (staleFiles.length > 0) {
   console.log(`Removendo: ${staleFiles.join(", ")}`);
   await storageFetch(`/object/${BUCKET}`, {
@@ -130,6 +164,7 @@ if (staleFiles.length > 0) {
     body: JSON.stringify({ prefixes: staleFiles.map((name) => `${PREFIX}/${name}`) }),
   });
 }
+console.log(`Blockmaps mantidos no bucket: ${Math.min(blockmaps.length, BLOCKMAPS_A_MANTER - 1)} anteriores + o desta versão.`);
 
 // 4. Sobe os artefatos novos (x-upsert sobrescreve se já existir)
 //

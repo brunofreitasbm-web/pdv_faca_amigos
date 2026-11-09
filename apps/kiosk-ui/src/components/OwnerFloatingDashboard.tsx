@@ -5,6 +5,7 @@ import { Api, businessDateFor } from "../api/client.js";
 import type { Unit } from "../api/client.js";
 import { money } from "../format.js";
 import { Emoji3D } from "./Emoji3D.js";
+import { startVisiblePolling } from "../lib/visiblePolling.js";
 
 interface UnitSummary {
   unitId: string;
@@ -69,12 +70,12 @@ export function OwnerFloatingDashboard() {
   }, [isOwner, units]);
 
   useEffect(() => {
-    if (isOwner) {
-      loadDashboardData();
-      const interval = setInterval(loadDashboardData, 60000); // 1 minuto
-      return () => clearInterval(interval);
-    }
-  }, [isOwner, loadDashboardData]);
+    if (!isOwner) return;
+    // Antes: a cada 1 min em qualquer tela, mesmo escondida. Agora o ritmo
+    // segue o uso (cartão aberto = alguém olhando) e para com a janela
+    // oculta. Abrir o cartão reinicia o poll e recarrega na hora.
+    return startVisiblePolling(() => void loadDashboardData(), isOpen ? 60_000 : 180_000);
+  }, [isOwner, loadDashboardData, isOpen]);
 
   if (!isOwner) return null;
 

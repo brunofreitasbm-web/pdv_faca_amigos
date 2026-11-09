@@ -105,25 +105,10 @@ export default defineConfig({
         // face_recognition_model.bin tem ~6.44MB — o limite de 4MB padrão
         // excluía esse arquivo do precache mesmo com o glob correto.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        // Google Fonts em runtime cache (offline após o primeiro load).
-        // Sem handler para *.supabase.co de propósito: auth/realtime/RPC
-        // passam direto, nunca cacheados.
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/,
-            handler: "StaleWhileRevalidate",
-            options: { cacheName: "google-fonts-css" },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts-woff",
-              expiration: { maxEntries: 20, maxAgeSeconds: 31536000 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+        // Fontes agora são woff2 empacotados (precache, glob acima): não há
+        // mais Google Fonts em runtime. Sem handler para *.supabase.co de
+        // propósito: auth/realtime/RPC passam direto, nunca cacheados.
+        runtimeCaching: [],
       },
     }),
   ],

@@ -19,7 +19,7 @@ export function WristbandLabelPreview({ data, entryTime }: WristbandLabelPreview
   return (
     <div className="wristband-printable" style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: "16px", minWidth: "680px" }}>
       <div style={{ borderRight: "2px solid #141414", paddingRight: "12px" }}>
-        <strong style={{ fontFamily: "Fredoka, sans-serif", fontSize: "16px", color: "#F0196B", display: "block" }}>
+        <strong style={{ fontFamily: "'Fredoka Variable', Fredoka, sans-serif", fontSize: "16px", color: "#F0196B", display: "block" }}>
           FaçaAmigos
         </strong>
         <span style={{ fontSize: "9px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "1px" }}>

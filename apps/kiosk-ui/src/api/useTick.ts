@@ -69,21 +69,29 @@ export function useActiveSessions(unitId: string | null): ActiveSessionsResult {
 
     refetch();
 
+    // Um check-in/checkout costuma gerar vários UPDATEs seguidos em
+    // fa_kiosk_sessions, e cada evento disparava uma recarga completa (2
+    // etapas, ~7 requisições) em CADA terminal da unidade. Agrupa a rajada
+    // numa recarga só, 400 ms depois do último evento.
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const onRealtimeEvent = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        void refetch();
+      }, 400);
+    };
+
     let channel: ReturnType<ReturnType<typeof supabase>["channel"]> | null = null;
     try {
-      const existingChannels = supabase().getChannels();
-      for (const ch of existingChannels) {
-        if (ch.topic.includes("fa_kiosk_sessions")) {
-          try {
-            supabase().removeChannel(ch);
-          } catch (_) { /* melhor esforço: falha ignorada */ }
-        }
-      }
-
+      // Nome único por instância e cleanup remove só o PRÓPRIO canal. Antes,
+      // este efeito removia todo canal cujo tópico contivesse "fa_kiosk_sessions",
+      // inclusive o de outra instância do hook montada ao mesmo tempo
+      // (MobileShell + MobilePainel), que ficava sem Realtime.
       const channelName = `fa_kiosk_sessions_unit_${unitId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       channel = supabase()
         .channel(channelName)
-        .on("postgres_changes", { event: "*", schema: "public", table: "fa_kiosk_sessions", filter: `unit_id=eq.${unitId}` }, refetch);
+        .on("postgres_changes", { event: "*", schema: "public", table: "fa_kiosk_sessions", filter: `unit_id=eq.${unitId}` }, onRealtimeEvent);
 
       channel.subscribe();
     } catch (err) {
@@ -91,6 +99,7 @@ export function useActiveSessions(unitId: string | null): ActiveSessionsResult {
     }
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       if (channel) {
         try {
           supabase().removeChannel(channel);

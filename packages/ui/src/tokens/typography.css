@@ -2,10 +2,10 @@
 
 :root {
   /* ── Font Families ── */
-  --font-display: 'Fredoka One', 'Nunito', cursive;
+  --font-display: 'Fredoka One', 'Nunito Variable', 'Nunito', cursive;
   /* ^ Bubbly rounded headlines (like "Horários", "Curta sem Preocupação") */
 
-  --font-body: 'Nunito', 'Segoe UI', sans-serif;
+  --font-body: 'Nunito Variable', 'Nunito', 'Segoe UI', sans-serif;
   /* ^ All UI text, labels, body copy */
 
   --font-mono: 'Courier New', monospace;

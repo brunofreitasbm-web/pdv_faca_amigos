@@ -39,9 +39,15 @@ if (branch !== "main") {
 console.log("\n=== 1/2 — Publicando instalador do kiosk (Electron) ===");
 run("pnpm release:kiosk");
 
-// 3. Kiosk-UI (PWA): deploy de produção no Vercel
-console.log("\n=== 2/2 — Publicando kiosk-ui (PWA) no Vercel ===");
-run("npx vercel link --yes --project kiosk-ui", kioskUiDir);
-run("npx vercel --prod --yes", kioskUiDir);
-
-console.log("\n✅ Manutenção concluída: kiosk (instalador) e kiosk-ui (PWA) publicados.");
+// 3. Kiosk-UI (PWA): o deploy de produção na Vercel já é automático pela
+// integração Git a cada push na main. Rodar `vercel --prod` aqui gerava um
+// build duplicado (cobrado) do mesmo commit. Só use a opção --vercel se o
+// deploy automático falhou e é preciso forçar.
+if (process.argv.includes("--vercel")) {
+  console.log("\n=== 2/2 — Forçando deploy do kiosk-ui (PWA) no Vercel ===");
+  run("npx vercel link --yes --project kiosk-ui", kioskUiDir);
+  run("npx vercel --prod --yes", kioskUiDir);
+  console.log("\n✅ Manutenção concluída: kiosk (instalador) e kiosk-ui (PWA) publicados.");
+} else {
+  console.log("\n✅ Instalador publicado. O PWA na Vercel é publicado pelo push na main (use --vercel para forçar).");
+}

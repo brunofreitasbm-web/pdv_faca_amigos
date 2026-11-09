@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Card, XIcon } from "@facaamigos/ui";
 
@@ -35,10 +35,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [dismiss],
   );
 
-  const value: ToastValue = {
-    success: (message) => push("success", message),
-    error: (message) => push("error", message),
-  };
+  // Memoizado de propósito: usePrintFailureAlerts e useSessionReportFailureAlerts
+  // têm `toast` nas dependências do efeito que assina o canal Realtime. Um
+  // objeto novo a cada render recriava a assinatura a cada toast mostrado ou
+  // fechado, e fazia loadContacts (CrmWhatsappTab) refazer a busca em loop
+  // quando a própria busca falhava e mostrava um toast de erro.
+  const value = useMemo<ToastValue>(
+    () => ({
+      success: (message) => push("success", message),
+      error: (message) => push("error", message),
+    }),
+    [push],
+  );
 
   return (
     <ToastContext.Provider value={value}>

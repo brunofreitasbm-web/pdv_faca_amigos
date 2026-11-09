@@ -1,3 +1,4 @@
+import { fiscalDocsPorPedido } from "../lib/fiscalDocsPorPedido.js";
 import { quoteForSession, normalizeCpf, normalizePhoneE164 } from "@facaamigos/domain";
 import type { EmployeeSector, SessionReportAnswers, PaperConsumptionSample } from "@facaamigos/domain";
 import { supabase } from "../lib/supabase/client.js";
@@ -2783,6 +2784,21 @@ export const Api = {
         .eq("order_id", orderId)
         .maybeSingle(),
     ),
+
+  /**
+   * Documentos fiscais de VÁRIOS pedidos numa consulta só (em lotes de 100).
+   * O Caixa chamava `fiscalDocByOrder` uma vez por venda do turno, a cada 5 s:
+   * com 80 vendas eram ~1.000 requisições por minuto só com a tela aberta.
+   */
+  fiscalDocsByOrders: async (orderIds: string[], docType: "NFCE" | "NFSE"): Promise<Record<string, FiscalDoc>> => {
+    const docs = await fetchInBatches(orderIds, 100, (batch) => {
+      const query = supabase().from("fa_kiosk_fiscal_docs").select("*").in("order_id", batch).eq("doc_type", docType);
+      // Mesmo critério das consultas unitárias: nfseDocByOrder nunca devolveu
+      // DESCARTADO; fiscalDocByOrder (NFC-e) devolvia (era o único documento).
+      return unwrap<FiscalDoc[]>(docType === "NFSE" ? query.neq("status", "DESCARTADO") : query);
+    });
+    return fiscalDocsPorPedido(docs);
+  },
 
   fiscalDocs: (unitId: string, limit = 50) =>
     unwrap<FiscalDoc[]>(

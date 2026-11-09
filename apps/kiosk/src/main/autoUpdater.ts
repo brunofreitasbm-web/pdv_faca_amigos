@@ -230,15 +230,21 @@ export function initAutoUpdater(): void {
   autoUpdater.logger = log;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  // Comentário antigo dizia "o CDN da Vercel não responde byteranges". O feed
-  // não está mais na Vercel (é o Supabase Storage, ver electron-builder.yml) e
-  // ele RESPONDE 206 a range request. O motivo hoje é outro:
-  // scripts/release-kiosk.mjs apaga as versões antigas do bucket a cada
-  // publicação, então o .blockmap da versão instalada no terminal não existe
-  // mais quando a nova sai — o download diferencial não teria contra o que
-  // diferenciar e cairia no download completo depois de um round-trip perdido.
-  // Reativar isto exige antes parar de apagar o blockmap anterior.
-  autoUpdater.disableDifferentialDownload = true;
+  // Download diferencial LIGADO: o terminal baixa só os blocos que mudaram em
+  // vez dos ~105 MB inteiros a cada release (o tráfego sai do Supabase
+  // Storage). Como funciona no electron-updater 6.8.x:
+  //   - o blockmap da versão instalada vem primeiro de um cache local
+  //     (current.blockmap) e, se não existir, do feed, pelo nome da versão
+  //     antiga. scripts/release-kiosk.mjs mantém os últimos blockmaps no
+  //     bucket justamente por isso;
+  //   - qualquer falha (blockmap ou instalador antigo ausente, servidor sem
+  //     multi-range) cai sozinha no download completo, ou seja, o pior caso é
+  //     o comportamento anterior.
+  // A primeira atualização depois desta mudança ainda é completa em terminais
+  // que nunca gravaram o cache local; o ganho aparece a partir da seguinte.
+  // O feed (Supabase Storage) responde 206 a range request. O comentário
+  // antigo sobre o "CDN da Vercel" não vale mais: o feed não está lá.
+  autoUpdater.disableDifferentialDownload = false;
   autoUpdater.disableWebInstaller = true;
 
   autoUpdater.on("checking-for-update", () => {

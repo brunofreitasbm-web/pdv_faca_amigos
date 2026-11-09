@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "./fonts.js";
 import "@facaamigos/ui/styles.css";
 import "./app.css";
 import { App } from "./App.js";
@@ -21,6 +22,23 @@ void flushOfflineQueue();
 import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { SecretVaultReader } from "./screens/SecretVaultReader.js";
 import { consumeHubSsoTicket } from "./lib/supabase/hubSso.js";
+
+// Depois de um deploy novo na Vercel, uma aba antiga tenta baixar chunks que
+// não existem mais (hash mudou) e o Vite dispara este evento. Recarrega UMA vez
+// para pegar o index.html novo; a trava em sessionStorage evita loop de
+// recarga se o problema for outro (rede fora do ar, por exemplo), caso em que
+// o ErrorBoundary mostra a tela de recuperação.
+window.addEventListener("vite:preloadError", (event) => {
+  try {
+    const last = Number(sessionStorage.getItem("fa_preload_reload_at") ?? 0);
+    if (Date.now() - last < 60_000) return;
+    sessionStorage.setItem("fa_preload_reload_at", String(Date.now()));
+  } catch {
+    return; // sem sessionStorage não dá para garantir ausência de loop
+  }
+  event.preventDefault();
+  window.location.reload();
+});
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root não encontrado");

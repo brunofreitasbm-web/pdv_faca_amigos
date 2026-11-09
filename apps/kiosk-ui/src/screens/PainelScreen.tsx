@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { startVisiblePolling } from "../lib/visiblePolling.js";
+import { Suspense, useEffect, useState } from "react";
 import { Card, Button, Select, StatusBadge, Badge, Tag, AsyncState, Modal, PrinterIcon, ShoppingCartIcon, PlusIcon, SignOutIcon, XIcon, HelpText, RevealPin, AutismRibbonIcon, ClockIcon, ArrowClockwiseIcon } from "@facaamigos/ui";
 import { Api, businessDateFor } from "../api/client.js";
 import type { ActiveSessionEntry, Plan, Package, Asset, BonusRule, VipFlag } from "../api/client.js";
@@ -18,12 +19,10 @@ import { SessionTimelineModal } from "../components/SessionTimelineModal.js";
 import { EditRegistrationModal } from "../components/EditRegistrationModal.js";
 import { getFriendlyWristbandCode } from "@facaamigos/domain";
 import { formatAge, formatElapsed, money } from "../format.js";
-import { EntradaScreen } from "./EntradaScreen.js";
 import type { PreCheckinPrefill } from "./EntradaScreen.js";
+import { EntradaScreen, SaidaScreen, PdvScreen } from "../lazyScreens.js";
 import type { PrepaidCreditQueueItem } from "../api/client.js";
 import { formatPlanoHoras } from "../contract/contractTemplate.js";
-import { SaidaScreen } from "./SaidaScreen.js";
-import { PdvScreen } from "./PdvScreen.js";
 import { WristbandQRCode } from "../components/WristbandQRCode.js";
 import { Emoji3D, renderEmoji } from "../components/Emoji3D.js";
 import { MetaDoDia } from "../components/MetaDoDia.js";
@@ -178,9 +177,8 @@ export function PainelScreen() {
   }
   useEffect(() => {
     if (!unit) return;
-    refetchPendingPreCheckins();
-    const interval = setInterval(refetchPendingPreCheckins, 8000);
-    return () => clearInterval(interval);
+    // Mesmo ritmo de antes (8 s), mas parado com a janela escondida.
+    return startVisiblePolling(refetchPendingPreCheckins, 8000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unit?.id]);
 
@@ -202,9 +200,7 @@ export function PainelScreen() {
   }
   useEffect(() => {
     if (!unit) return;
-    refetchPrepaidCreditQueue();
-    const interval = setInterval(refetchPrepaidCreditQueue, 10000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(refetchPrepaidCreditQueue, 10000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unit?.id]);
 
@@ -260,51 +256,71 @@ export function PainelScreen() {
     };
   }, [unit?.id, childIdsKey]);
 
-  // Faturamento muda bem mais devagar que a ocupação — repolla num intervalo mais espaçado.
+  // Faturamento muda bem mais devagar que a ocupação — repolla num intervalo
+  // mais espaçado, e só enquanto a janela está visível. Só as 3 RPCs de
+  // faturamento ficam no ciclo; a configuração abaixo quase nunca muda.
   useEffect(() => {
     if (!unit) return;
     let cancelled = false;
     async function poll() {
       try {
-        const [revenueRes, ticketMedioRes, ticketGoalRes, bonusRulesRes, bonusProgramsRes, rentalRes] = await Promise.allSettled([
+        const [revenueRes, ticketMedioRes, rentalRes] = await Promise.allSettled([
           Api.todayRevenue(unit!.id, unit!.business_day_cutoff_hour),
           Api.todayTicketMedio(unit!.id, unit!.business_day_cutoff_hour),
-          Api.ticketGoal(unit!.id),
-          Api.bonusRules(unit!.id),
-          Api.bonusProgramsByUnit([unit!.id]),
           Api.todayRentalCents(unit!.id, unit!.business_day_cutoff_hour),
         ]);
-        if (!cancelled) {
-          if (revenueRes.status === "fulfilled") {
-            setTodayRevenueCents(revenueRes.value.totalCents);
-          }
-          if (rentalRes.status === "fulfilled") {
-            setTodayRentalCents(rentalRes.value.totalCents);
-          }
-          if (ticketMedioRes.status === "fulfilled") {
-            setTicketMedioCents(ticketMedioRes.value.avgCents);
-            setTodayOrdersCount(ticketMedioRes.value.ordersCount);
-          }
-          if (ticketGoalRes.status === "fulfilled") {
-            setTicketMinCents(ticketGoalRes.value?.minTicketCents ?? 0);
-            setTicketTargetCents(ticketGoalRes.value?.targetTicketCents ?? 0);
-          }
-          if (bonusRulesRes.status === "fulfilled") {
-            setBonusRules(bonusRulesRes.value || []);
-          }
-          if (bonusProgramsRes.status === "fulfilled") {
-            setBonusProgram(bonusProgramsRes.value[unit!.id] ?? null);
-          }
+        if (cancelled) return;
+        if (revenueRes.status === "fulfilled") {
+          setTodayRevenueCents(revenueRes.value.totalCents);
+        }
+        if (rentalRes.status === "fulfilled") {
+          setTodayRentalCents(rentalRes.value.totalCents);
+        }
+        if (ticketMedioRes.status === "fulfilled") {
+          setTicketMedioCents(ticketMedioRes.value.avgCents);
+          setTodayOrdersCount(ticketMedioRes.value.ordersCount);
         }
       } catch {
         // Meta é um extra informativo
       }
     }
-    poll();
-    const interval = setInterval(poll, 15000);
+    const stop = startVisiblePolling(() => void poll(), 15_000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      stop();
+    };
+  }, [unit]);
+
+  // Metas e regras de bonificação mudam algumas vezes por mês, mas estavam no
+  // mesmo ciclo de 15 s do faturamento (7 de 10 requisições do ciclo, incluindo
+  // cinco tabelas em bonusProgramsByUnit). Agora: uma vez ao abrir a tela (que
+  // desmonta ao ir para Configurações, então alteração lá é lida na volta) e
+  // revalidação a cada 10 min.
+  useEffect(() => {
+    if (!unit) return;
+    let cancelled = false;
+    async function loadConfig() {
+      const [ticketGoalRes, bonusRulesRes, bonusProgramsRes] = await Promise.allSettled([
+        Api.ticketGoal(unit!.id),
+        Api.bonusRules(unit!.id),
+        Api.bonusProgramsByUnit([unit!.id]),
+      ]);
+      if (cancelled) return;
+      if (ticketGoalRes.status === "fulfilled") {
+        setTicketMinCents(ticketGoalRes.value?.minTicketCents ?? 0);
+        setTicketTargetCents(ticketGoalRes.value?.targetTicketCents ?? 0);
+      }
+      if (bonusRulesRes.status === "fulfilled") {
+        setBonusRules(bonusRulesRes.value || []);
+      }
+      if (bonusProgramsRes.status === "fulfilled") {
+        setBonusProgram(bonusProgramsRes.value[unit!.id] ?? null);
+      }
+    }
+    const stop = startVisiblePolling(() => void loadConfig(), 10 * 60_000);
+    return () => {
+      cancelled = true;
+      stop();
     };
   }, [unit]);
 
@@ -1431,6 +1447,7 @@ export function PainelScreen() {
           padding="0"
           zIndex={150}
         >
+          <Suspense fallback={null}>
           <EntradaScreen
             onSuccess={() => { refetchActiveSessions(); refetchPrepaidCreditQueue(); }}
             prefill={preCheckinPrefill}
@@ -1441,18 +1458,23 @@ export function PainelScreen() {
             prepaidPrefill={prepaidPrefill}
             onPrepaidPrefillConsumed={() => setPrepaidPrefill(null)}
           />
+          </Suspense>
         </Modal>
       )}
 
       {pdvOpen && (
         <Modal onClose={() => setPdvOpen(false)} ariaLabel="PDV" maxWidth="1100px" padding="0" zIndex={150}>
-          <PdvScreen />
+          <Suspense fallback={null}>
+            <PdvScreen />
+          </Suspense>
         </Modal>
       )}
 
       {saidaOpen && (
         <Modal onClose={() => setSaidaOpen(false)} ariaLabel="Saída" maxWidth="600px" padding="0" zIndex={150}>
-          <SaidaScreen entriesOverride={entries} />
+          <Suspense fallback={null}>
+            <SaidaScreen entriesOverride={entries} />
+          </Suspense>
         </Modal>
       )}
 

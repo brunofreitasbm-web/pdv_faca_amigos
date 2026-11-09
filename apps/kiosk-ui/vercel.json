@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages ../../pnpm-lock.yaml",
   "headers": [
     {
       "source": "/(version.json|sw.js|index.html)",
