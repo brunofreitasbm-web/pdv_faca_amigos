@@ -6,6 +6,7 @@ import { Api, businessDateFor } from "../../../api/client.js";
 import { money } from "../../../format.js";
 import { supabase } from "../../../lib/supabase/client.js";
 import { averageScore, summarizeNps } from "../../../lib/nps.js";
+import { sumKnownCounts } from "../../../lib/sumKnownCounts.js";
 import { Emoji3D, renderEmoji } from "../../../components/Emoji3D.js";
 
 interface UnitMetric {
@@ -15,8 +16,8 @@ interface UnitMetric {
   goalCents: number;
   revenueCents: number;
   ordersCount: number;
-  activeSessionsCount: number;
-  overdueSessionsCount: number;
+  /** null = consulta falhou (desconhecido, não zero). */
+  activeSessionsCount: number | null;
 }
 
 interface NpsLogItem {
@@ -52,26 +53,21 @@ export function OwnerAcompanhamentoTab() {
             Api.todayTicketMedio(unit.id, cutoff).catch(() => ({ ordersCount: 0 })),
           ]);
 
-          // Tenta buscar sessões ativas no Supabase
-          let activeSessionsCount = 0;
-          let overdueSessionsCount = 0;
+          // Sessões em andamento. Pausa é paused_at_ms não nulo com status
+          // ATIVA (não existe status PAUSADA gravado), então já entram aqui.
+          // Falha vira null (desconhecido), nunca 0.
+          let activeSessionsCount: number | null = null;
           try {
-            const { data: sessoes } = await supabase()
-              .from("sessions")
-              .select("id, status, duration_minutes, created_at")
+            const { count, error } = await supabase()
+              .from("fa_kiosk_sessions")
+              .select("id", { count: "exact", head: true })
               .eq("unit_id", unit.id)
-              .in("status", ["ATIVA", "PAUSADA"]);
-
-            if (sessoes) {
-              activeSessionsCount = sessoes.length;
-              const nowMs = Date.now();
-              overdueSessionsCount = sessoes.filter((s) => {
-                const createdMs = new Date(s.created_at).getTime();
-                const durMs = (s.duration_minutes || 30) * 60_000;
-                return nowMs > createdMs + durMs;
-              }).length;
-            }
-          } catch { /* melhor esforço: falha ignorada */ }
+              .eq("status", "ATIVA");
+            if (error) console.warn("Owner: falha ao contar sessões ativas", unit.id, error.message);
+            else activeSessionsCount = count ?? 0;
+          } catch (err) {
+            console.warn("Owner: falha ao contar sessões ativas", unit.id, err);
+          }
 
           return {
             unitId: unit.id,
@@ -81,7 +77,6 @@ export function OwnerAcompanhamentoTab() {
             revenueCents: revenue.totalCents || 0,
             ordersCount: ticketMedio.ordersCount || 0,
             activeSessionsCount,
-            overdueSessionsCount,
           };
         })
       );
@@ -132,8 +127,7 @@ export function OwnerAcompanhamentoTab() {
   const totalRevenue = filteredMetrics.reduce((acc, m) => acc + m.revenueCents, 0);
   const totalGoal = filteredMetrics.reduce((acc, m) => acc + m.goalCents, 0);
   const totalOrders = filteredMetrics.reduce((acc, m) => acc + m.ordersCount, 0);
-  const totalActiveSessions = filteredMetrics.reduce((acc, m) => acc + m.activeSessionsCount, 0);
-  const totalOverdueSessions = filteredMetrics.reduce((acc, m) => acc + m.overdueSessionsCount, 0);
+  const totalActiveSessions = sumKnownCounts(filteredMetrics.map((m) => m.activeSessionsCount));
 
   const goalPercent = totalGoal > 0 ? Math.min(100, Math.round((totalRevenue / totalGoal) * 100)) : null;
 
@@ -262,15 +256,9 @@ export function OwnerAcompanhamentoTab() {
             Crianças Brincando Agora
           </span>
           <div style={{ fontSize: "28px", fontWeight: "bold", color: "var(--text-primary)", margin: "6px 0 2px" }}>
-            {totalActiveSessions}
+            {totalActiveSessions ?? "—"}
           </div>
-          {totalOverdueSessions > 0 ? (
-            <span style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-error)" }}>
-              ⚠️ {totalOverdueSessions} com tempo excedido
-            </span>
-          ) : (
-            <span style={{ fontSize: "12px", color: "var(--color-success)" }}>✓ Todas no prazo</span>
-          )}
+          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Sessões em andamento (inclui pausadas)</span>
         </Card>
 
         {/* Card Média NPS */}
@@ -328,14 +316,7 @@ export function OwnerAcompanhamentoTab() {
 
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
                     <span style={{ color: "var(--text-muted)" }}>Sessões Ativas:</span>
-                    <span>
-                      <strong>{m.activeSessionsCount} ativas</strong>
-                      {m.overdueSessionsCount > 0 && (
-                        <span style={{ color: "var(--color-error)", fontWeight: "bold", marginLeft: "6px" }}>
-                          ({m.overdueSessionsCount} excedidas)
-                        </span>
-                      )}
-                    </span>
+                    <strong>{m.activeSessionsCount === null ? "—" : `${m.activeSessionsCount} ativas`}</strong>
                   </div>
                 </div>
               </Card>
