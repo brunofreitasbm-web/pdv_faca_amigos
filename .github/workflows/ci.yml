@@ -1,0 +1,54 @@
+# Testes rápidos em Linux a cada push e PR. Existe porque o build do instalador
+# agora roda só 1x por dia (build-kiosk.yml): sem este CI, um teste quebrado
+# só apareceria às 3h da manhã, dentro de um job Windows de 40 minutos.
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/kiosk/**"
+      - "apps/kiosk-ui/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "apps/kiosk/**"
+      - "apps/kiosk-ui/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/ci.yml"
+
+# Runs empilhados do mesmo branch/PR: só o último importa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Testes de cobrança (domain e kiosk-ui)
+        run: pnpm --filter @facaamigos/domain --filter @facaamigos/kiosk-ui test
+
+      # Se este passo falhar só em Linux (dependência nativa/Windows), troque
+      # por `continue-on-error: true`: o job Windows do build-kiosk.yml segue
+      # rodando estes mesmos testes antes de empacotar.
+      - name: Testes do kiosk
+        run: pnpm --filter @facaamigos/kiosk test

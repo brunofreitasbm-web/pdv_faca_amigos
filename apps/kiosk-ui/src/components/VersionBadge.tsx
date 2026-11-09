@@ -34,18 +34,35 @@ export function VersionBadge() {
     }
 
     // Fallback periodic polling via HTTP para tablets/PWA
+    // Só faz sentido quando a SPA é servida pelo Fastify do kiosk (tablet na
+    // rede local). Na Vercel a rota não existe e o rewrite catch-all devolve o
+    // index.html: nesse caso a resposta não é JSON e paramos de insistir,
+    // em vez de gastar uma requisição a cada 30 s por aba aberta.
+    let stopped = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const stop = () => {
+      stopped = true;
+      if (interval) clearInterval(interval);
+    };
     const fetchInfo = () => {
+      if (stopped) return;
       fetch("/api/system/info")
-        .then((res) => res.json())
-        .then((data: { update?: { status: string; version?: string; progress?: number; error?: string } }) => {
+        .then((res) => {
+          if (!res.ok || !(res.headers.get("content-type") ?? "").includes("json")) {
+            stop();
+            return null;
+          }
+          return res.json();
+        })
+        .then((data: { update?: { status: string; version?: string; progress?: number; error?: string } } | null) => {
           if (data?.update) setUpdateState(data.update);
         })
         .catch(() => {});
     };
 
     fetchInfo();
-    const interval = setInterval(fetchInfo, 30_000);
-    return () => clearInterval(interval);
+    interval = setInterval(fetchInfo, 30_000);
+    return stop;
   }, []);
 
   const isDownloaded = updateState.status === "downloaded";

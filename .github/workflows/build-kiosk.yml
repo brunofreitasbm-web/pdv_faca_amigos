@@ -1,41 +1,85 @@
-# Gera o instalador Windows do quiosque.
+# Gera e publica o instalador Windows do quiosque, em LOTE DIÁRIO.
 #
 # Existe porque o instalador NSIS só empacota em Windows (no Linux o
 # electron-builder precisa de Wine com suporte 32-bit) — sem isto o build
 # depende de alguém rodar na própria máquina, e a versão distribuída passa
 # a variar conforme quem buildou.
 #
-# Disparo automático a cada push na main que mexa em código do kiosk, ou
-# manual via workflow_dispatch. Antes de buildar, o job `bump-version`
-# incrementa sozinho o patch de apps/kiosk/package.json: sem isso, dois
-# pushes seguidos publicam o MESMO número de versão e o electron-updater
-# nos terminais simplesmente ignora o segundo (ele só reage a versão nova).
+# Antes, cada push na main buildava e publicava (~45 releases em 25 dias, cada
+# uma com 2 jobs Windows e 105 MB baixados por terminal). Agora:
+#   - push/PR só rodam testes, em Linux (ver ci.yml);
+#   - este workflow roda 1x por dia às 03:00 (Brasília), só se houve mudança
+#     no código do kiosk desde a última versão publicada;
+#   - para urgência, dispare manualmente (workflow_dispatch). Atenção: os
+#     terminais em operação se atualizam sozinhos.
+#
+# O job `bump-version` incrementa o patch de apps/kiosk/package.json antes do
+# build: sem isso o electron-updater dos terminais ignora a publicação (ele só
+# reage a versão nova).
 name: Build do instalador (kiosk)
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/kiosk/**"
-      - "apps/kiosk-ui/**"
-      - "packages/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/build-kiosk.yml"
+  schedule:
+    - cron: "0 6 * * *" # 03:00 em Brasília (UTC-3)
   workflow_dispatch:
     inputs:
       publicar:
-        description: "Publicar no feed de auto-update? ATENÇÃO: os terminais em operação se atualizam sozinhos."
+        description: "Publicar no feed de auto-update? ATENÇÃO: os terminais em operação se atualizam sozinhos. Desmarcado = ensaio (builda e testa, sem bump e sem publicar)."
         type: boolean
         default: true
 
+# Enfileira em vez de cancelar: cancelar um run no meio da publicação deixaria
+# o bucket com .exe novo e latest.yml velho (ou o inverso).
+concurrency:
+  group: release-kiosk
+  cancel-in-progress: false
+
 jobs:
-  # Roda ANTES do build para que o instalador já saia com a versão nova. O
-  # commit de bump leva "[skip-bump]" na mensagem — é o que impede o loop
-  # infinito (o próprio push do bump dispara este workflow de novo; sem a
-  # marca, esse segundo run bumparia outra vez, e o terceiro run de novo...).
+  # Decide se vale gastar minutos de runner Windows. No disparo manual sempre
+  # vale. No agendado, só se algo que entra no instalador mudou desde o último
+  # commit de release.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+      publish: ${{ steps.check.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Há mudança desde a última versão publicada?
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "publish=${{ inputs.publicar }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          LAST=$(git log -1 --format=%H --grep='^chore(release): kiosk v' || true)
+          if [ -z "$LAST" ]; then
+            echo "Nenhum commit de release encontrado; buildando por segurança."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # api/ (funções da Vercel), docs e testes não entram no instalador.
+          if git diff --quiet "$LAST" HEAD -- \
+              apps/kiosk apps/kiosk-ui packages pnpm-lock.yaml \
+              ':(exclude)apps/kiosk-ui/api' \
+              ':(exclude)apps/kiosk/package.json' \
+              ':(exclude)**/*.md' \
+              ':(exclude)**/*.test.ts' ':(exclude)**/*.test.tsx'; then
+            echo "Sem mudança relevante desde $LAST. Nada a publicar."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   bump-version:
-    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip-bump]') }}
+    needs: gate
+    if: ${{ needs.gate.outputs.changed == 'true' && needs.gate.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -56,7 +100,9 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Nova versão: $VERSION"
 
-      - name: Commitar e publicar o bump direto na main
+      # Sem trigger de push neste workflow, o commit de bump não dispara nada
+      # (e push feito com GITHUB_TOKEN nunca dispara workflows de qualquer forma).
+      - name: Commitar e publicar o bump direto na branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -65,16 +111,19 @@ jobs:
           git push
 
   build:
-    needs: bump-version
+    needs: [gate, bump-version]
+    # bump-version é "skipped" num ensaio (publicar=false); isso não pode
+    # impedir o build, só falha ou cancelamento.
+    if: ${{ !cancelled() && needs.gate.outputs.changed == 'true' && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped') }}
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      # Traz o commit de bump que o job anterior acabou de publicar na main —
-      # sem isso o build pegaria a versão antiga e a publicação seria
-      # descartada pelo electron-updater dos terminais (versão repetida).
+      # Traz o commit de bump que o job anterior acabou de publicar — sem isso
+      # o build pegaria a versão antiga e a publicação seria descartada pelo
+      # electron-updater dos terminais (versão repetida).
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref_name }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -84,6 +133,24 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+
+      # Binário do Electron e ferramentas do electron-builder (NSIS, winCodeSign)
+      # são baixados do GitHub a cada build; sem cache, é o passo mais lento
+      # depois do próprio empacotamento. A chave muda com o lockfile (versão do
+      # Electron/electron-builder).
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-${{ runner.os }}-
+
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
 
@@ -123,6 +190,9 @@ jobs:
           }
           Write-Host 'OK: nenhuma credencial no artefato.'
 
+      # Este artifact É o que o job `publicar` sobe para o feed: o binário
+      # publicado é o mesmo que foi testado e verificado acima. Retenção curta
+      # porque só serve de ponte entre os dois jobs (e de depuração recente).
       - uses: actions/upload-artifact@v4
         with:
           name: FacaAmigos-Setup
@@ -131,45 +201,43 @@ jobs:
             apps/kiosk/release/*.exe.blockmap
             apps/kiosk/release/latest.yml
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   # O Environment "producao" precisa continuar aqui: é dele que vêm
   # FACAAMIGOS_SUPABASE_URL/FACAAMIGOS_SUPABASE_SECRET_KEY (Environment
   # secrets, não secrets do repositório) — tirar essa linha derruba o
-  # publish por falta de credencial, mesmo com "publicar: true" marcado
-  # (visto em produção: run 33288814977, "ausentes" em release-kiosk.mjs).
-  # Se o objetivo é publicar sem esperar aprovação, ajuste isso em
-  # Settings > Environments > producao > Required reviewers (remover os
-  # revisores obrigatórios) — não removendo o environment daqui.
+  # publish por falta de credencial (visto em produção: run 33288814977,
+  # "ausentes" em release-kiosk.mjs). Se o objetivo é publicar sem esperar
+  # aprovação, ajuste em Settings > Environments > producao > Required
+  # reviewers — não removendo o environment daqui.
+  #
+  # Roda em Linux: só baixa o artifact e envia ao Supabase Storage (fetch +
+  # fs, sem build), então não precisa de runner Windows nem de pnpm install.
   publicar:
-    needs: [bump-version, build]
-    if: github.event_name == 'push' || inputs.publicar == true
-    runs-on: windows-latest
-    timeout-minutes: 40
+    needs: [gate, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.gate.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: producao
     steps:
-      # Mesmo motivo do job `build`: precisa do commit de bump já na main
-      # para publicar o instalador com a versão nova, não a antiga.
       - uses: actions/checkout@v4
         with:
-          ref: main
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.20.0
+          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: FacaAmigos-Setup
+          path: apps/kiosk/release
 
       # As credenciais entram como variáveis de ambiente, nunca como
       # arquivo: release-kiosk.mjs lê process.env primeiro justamente para
       # o publish ter a chave sem que ela entre no instalador.
-      - name: Buildar e publicar no feed
+      - name: Publicar no feed
         env:
           FACAAMIGOS_SUPABASE_URL: ${{ secrets.FACAAMIGOS_SUPABASE_URL }}
           FACAAMIGOS_SUPABASE_SECRET_KEY: ${{ secrets.FACAAMIGOS_SUPABASE_SECRET_KEY }}
-        run: pnpm release:kiosk
+        run: node scripts/release-kiosk.mjs --skip-build

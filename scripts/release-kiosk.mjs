@@ -83,8 +83,15 @@ async function storageFetch(path, options, retries = 3) {
   }
 }
 
-// 1. Build do instalador (workspace + kiosk-ui + ícones + electron-builder)
-run("pnpm dist:kiosk");
+// 1. Build do instalador (workspace + kiosk-ui + ícones + electron-builder).
+// No CI o build já foi feito (e testado) no job Windows anterior e o artifact
+// foi baixado para apps/kiosk/release: --skip-build publica exatamente esse
+// binário em vez de refazer tudo. Uso local sem a flag continua igual.
+if (process.argv.includes("--skip-build")) {
+  console.log("\n--skip-build: usando o instalador já gerado em apps/kiosk/release");
+} else {
+  run("pnpm dist:kiosk");
+}
 
 // 1b. Mesma guarda que o CI faz (build-kiosk.yml), porque o build LOCAL é
 // o caso perigoso: aqui apps/kiosk/.env existe de verdade, e o destino do
