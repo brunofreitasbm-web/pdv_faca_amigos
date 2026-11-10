@@ -21,59 +21,13 @@ export function SecretVaultReader({ secretId }: SecretVaultReaderProps) {
       const json = await res.json();
 
       if (!res.ok || json.error) {
-        // Se for o link de exemplo da minuta, carrega os dados de homologação de demonstração
-        if (secretId.includes("018bcfe5")) {
-          setPayload(
-            JSON.stringify(
-              {
-                ambiente: "HOMOLOGAÇÃO (FaçaAmigos)",
-                unidades: [
-                  { nome: "Playground (L-142 / PSB-1316)", apiKey: "fa_shp_playground_homolog_placeholder" },
-                  { nome: "Parque Circuito (L-143 / PSB-1346)", apiKey: "fa_shp_circuito_homolog_placeholder" }
-                ],
-                endpoints: {
-                  health: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/health",
-                  faturamento: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/faturamento",
-                  vendas: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/vendas"
-                }
-              },
-              null,
-              2
-            )
-          );
-          setDestroyed(true);
-        } else {
-          setError(json.message || "Este link seguro já foi lido e destruído ou expirou permanentemente.");
-        }
+        setError(json.message || "Este link seguro já foi lido e destruído ou expirou permanentemente.");
       } else {
         setPayload(json.payload);
         setDestroyed(json.destroyed);
       }
     } catch (err) {
-      // Fallback gracioso para a demonstração da minuta de homologação
-      if (secretId.includes("018bcfe5")) {
-        setPayload(
-          JSON.stringify(
-            {
-              ambiente: "HOMOLOGAÇÃO (FaçaAmigos)",
-              unidades: [
-                { nome: "Playground (L-142 / PSB-1316)", apiKey: "fa_shp_playground_homolog_placeholder" },
-                { nome: "Parque Circuito (L-143 / PSB-1346)", apiKey: "fa_shp_circuito_homolog_placeholder" }
-              ],
-              endpoints: {
-                health: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/health",
-                faturamento: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/faturamento",
-                vendas: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/vendas"
-              }
-            },
-            null,
-            2
-          )
-        );
-        setDestroyed(true);
-      } else {
-        setError("Este link seguro expirou ou foi destruído após a primeira leitura.");
-      }
+      setError("Este link seguro expirou ou foi destruído após a primeira leitura.");
     } finally {
       setLoading(false);
     }

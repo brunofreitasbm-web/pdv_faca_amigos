@@ -121,3 +121,6 @@ view-source_*.html
 !.env.example
 !**/.env.example
 .voz/
+
+# Config local de MCP: carrega token pessoal na URL — nunca versionar
+.mcp.json

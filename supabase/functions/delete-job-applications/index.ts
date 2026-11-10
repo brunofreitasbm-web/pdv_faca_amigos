@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     console.error("[delete-job-applications] TALENT_API_KEY não configurada — recusando");
     return jsonResponse(req, { error: "TALENT_API_KEY_MISSING" }, 503);
   }
-  if (req.headers.get("x-api-key") !== expectedKey) {
+  if (!(await constantTimeEqual(req.headers.get("x-api-key") ?? "", expectedKey))) {
     return jsonResponse(req, { error: "Acesso não autorizado: API Key inválida" }, 401);
   }
 
@@ -96,3 +96,17 @@ Deno.serve(async (req) => {
   console.log(`[delete-job-applications] deleted=${deleted.length} failed=${failed.length}`);
   return jsonResponse(req, { deleted, failed });
 });
+
+/** Compara em tempo constante (hash SHA-256 dos dois lados iguala o tamanho). */
+async function constantTimeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const va = new Uint8Array(ha);
+  const vb = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
+  return diff === 0;
+}
