@@ -1,7 +1,7 @@
 {
   "name": "@facaamigos/kiosk",
   "private": true,
-  "version": "0.1.208",
+  "version": "0.1.209",
   "description": "Electron main + servidor Fastify local (D1/D2 do plano) — única gravadora do ponto, serve a SPA para o Electron e para os tablets da LAN.",
   "type": "module",
   "main": "./bundle/main.mjs",
