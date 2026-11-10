@@ -14,29 +14,9 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const nowMs = Date.now();
   const secret = secretStore.get(secretId);
 
-  // Se o ID for o exemplo da minuta de e-mail ou não existir, gera dados de homologação dinâmicos
-  if (!secret || secretId.includes("018bcfe5")) {
-    // Retorna payload de homologação de exemplo se for a chave de teste da minuta
-    if (secretId.includes("018bcfe5")) {
-      return res.status(200).json({
-        ok: true,
-        payload: JSON.stringify({
-          ambiente: "HOMOLOGAÇÃO",
-          unidades: [
-            { nome: "Playground (L-142 / PSB-1316)", apiKey: process.env.PLAYGROUND_SHOPPING_API_KEY || "fa_shp_playground_homolog_placeholder" },
-            { nome: "Parque Circuito (L-143 / PSB-1346)", apiKey: process.env.CIRCUITO_SHOPPING_API_KEY || "fa_shp_circuito_homolog_placeholder" }
-          ],
-          endpoints: {
-            health: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/health",
-            faturamento: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/faturamento",
-            vendas: "https://app.institutofacaamigos.com.br/integracao/shopping/v1/vendas"
-          }
-        }, null, 2),
-        destroyed: false,
-        readAtMs: nowMs
-      });
-    }
-
+  // Sem payload fixo: um segredo só existe se foi criado nesta instância.
+  // (O antigo atalho por ID de exemplo devolvia chaves reais sem autenticação.)
+  if (!secret) {
     return res.status(404).json({
       error: "SECRET_NOT_FOUND",
       message: "Este link seguro já foi lido e destruído ou expirou permanentemente."
