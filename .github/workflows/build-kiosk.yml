@@ -45,7 +45,7 @@ jobs:
       changed: ${{ steps.check.outputs.changed }}
       publish: ${{ steps.check.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -87,7 +87,7 @@ jobs:
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -121,7 +121,7 @@ jobs:
       # Traz o commit de bump que o job anterior acabou de publicar — sem isso
       # o build pegaria a versão antiga e a publicação seria descartada pelo
       # electron-updater dos terminais (versão repetida).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
 
@@ -220,7 +220,7 @@ jobs:
     timeout-minutes: 20
     environment: producao
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
 
