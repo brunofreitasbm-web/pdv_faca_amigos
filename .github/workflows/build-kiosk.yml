@@ -138,7 +138,7 @@ jobs:
       # são baixados do GitHub a cada build; sem cache, é o passo mais lento
       # depois do próprio empacotamento. A chave muda com o lockfile (versão do
       # Electron/electron-builder).
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~\AppData\Local\electron\Cache
@@ -146,7 +146,7 @@ jobs:
           key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: electron-${{ runner.os }}-
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}
