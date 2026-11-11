@@ -13,8 +13,8 @@ allowBuilds:
 # uma só SPA, um só motor de domínio — não faz sentido ter React ou
 # TypeScript divergindo entre kiosk-ui, backoffice e ui).
 catalog:
-  react: ^19.2.8
-  react-dom: ^19.2.8
+  react: ^19.3.1
+  react-dom: ^19.3.1
   typescript: ^5.9.3
   vitest: ^2.1.9
   zod: ^3.25.76
