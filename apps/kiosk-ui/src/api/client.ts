@@ -872,6 +872,10 @@ export interface ChildPackageBalance {
   remaining_minutes: number;
   included_minutes: number;
   expires_at_ms: number;
+  /** false = pacote vendido para outra criança do mesmo responsável (irmão); só entra com confirmação do balcão. */
+  is_own?: boolean;
+  /** Nome da criança dona do pacote (só quando is_own = false). */
+  owner_child_name?: string | null;
 }
 
 /** Uma criança com saldo pré-pago aguardando início — fila do Painel (`fa_kiosk_child_credit_queue`). */
@@ -2395,6 +2399,8 @@ export const Api = {
     childCreditId?: string | null;
     /** Entrada consumindo o saldo de pacote (Porto Seguro) do responsável: sem plano, sem cupom. */
     useGuardianPackage?: boolean;
+    /** Balcão confirmou usar o saldo de pacote de OUTRA criança do responsável (irmão). */
+    allowSiblingPackage?: boolean;
     employeeId: string;
     child: { id?: string; fullName: string; birthDate: string; inclusiveEligible: boolean; inclusiveProofType?: string };
     guardian: { id?: string; fullName: string; cpf: string; phoneE164: string };
@@ -2435,6 +2441,7 @@ export const Api = {
           p_package_id: body.packageId ?? null,
           p_child_credit_id: body.childCreditId ?? null,
           p_use_guardian_package: body.useGuardianPackage ?? false,
+          p_allow_sibling_package: body.allowSiblingPackage ?? false,
           p_asset_id: body.assetId ?? null,
           p_guardian: { id: body.guardian.id, fullName: body.guardian.fullName, cpf: body.guardian.cpf, phoneE164: body.guardian.phoneE164 },
           p_child: {

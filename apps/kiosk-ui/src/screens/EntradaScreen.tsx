@@ -232,7 +232,12 @@ export function EntradaScreen({
   // fechamento abate daqui o tempo da visita e, na sessão em saldo pré-pago,
   // o que o saldo da criança não cobrir.
   const [childPackages, setChildPackages] = useState<ChildPackageBalance[]>([]);
-  const childPackageMinutes = childPackages.reduce((sum, p) => sum + p.remaining_minutes, 0);
+  // Só o pacote da PRÓPRIA criança entra sozinho. Pacote de irmão é opção
+  // separada, com confirmação explícita do balcão (ver SIBLING_PACKAGE_BALANCE).
+  const ownChildPackages = childPackages.filter((p) => p.is_own !== false);
+  const siblingPackages = childPackages.filter((p) => p.is_own === false);
+  const childPackageMinutes = ownChildPackages.reduce((sum, p) => sum + p.remaining_minutes, 0);
+  const siblingPackageMinutes = siblingPackages.reduce((sum, p) => sum + p.remaining_minutes, 0);
   // Saldo de pacote da família gravado em outro responsável: o check-in
   // cobraria avulso, então o operador é avisado antes de confirmar.
   const [foreignPackages, setForeignPackages] = useState<ForeignPackageBalance[]>([]);
@@ -434,7 +439,7 @@ export function EntradaScreen({
       Api.childPackages(unit.id, match.id)
         .then((pkgs) => {
           setChildPackages(pkgs);
-          if (pkgs.length > 0 && pkgs.some((p) => p.remaining_minutes > 0)) {
+          if (pkgs.some((p) => p.is_own !== false && p.remaining_minutes > 0)) {
             setPlanId(PACKAGE_BALANCE);
           }
         })
@@ -586,7 +591,10 @@ export function EntradaScreen({
   const usingChildCredit = planId === CHILD_CREDIT;
   // Sentinela de uso de saldo de pacote existente (Porto Seguro etc.)
   const PACKAGE_BALANCE = "PACKAGE_BALANCE";
-  const usingPackageBalance = planId === PACKAGE_BALANCE;
+  // Saldo de pacote de OUTRA criança (irmão): nunca é selecionado sozinho.
+  const SIBLING_PACKAGE_BALANCE = "PACKAGE_BALANCE_SIBLING";
+  const usingSiblingPackage = planId === SIBLING_PACKAGE_BALANCE;
+  const usingPackageBalance = planId === PACKAGE_BALANCE || usingSiblingPackage;
   // Com saldo de pacote válido não se vende plano avulso no Playground: o
   // saldo é consumido primeiro (o servidor também recusa, ver fa_checkin).
   const saldoPacoteObrigatorio = Boolean(matchedChild) && childPackageMinutes > 0 && activity === "PLAYGROUND";
@@ -637,11 +645,13 @@ export function EntradaScreen({
     (isBirthdayCourtesy ? birthdayOffer?.plan : undefined) ??
     (usingPackageBalance
       ? {
-          id: PACKAGE_BALANCE,
+          id: usingSiblingPackage ? SIBLING_PACKAGE_BALANCE : PACKAGE_BALANCE,
           activity: "PLAYGROUND" as const,
-          name: childPackages[0]?.package_name ? `${childPackages[0].package_name} (Saldo)` : "Porto Seguro (Saldo)",
+          name: (usingSiblingPackage ? siblingPackages : ownChildPackages)[0]?.package_name
+            ? `${(usingSiblingPackage ? siblingPackages : ownChildPackages)[0]!.package_name} (Saldo)`
+            : "Porto Seguro (Saldo)",
           valueCents: 0,
-          durationValue: childPackageMinutes,
+          durationValue: usingSiblingPackage ? siblingPackageMinutes : childPackageMinutes,
           durationUnit: "MINUTO" as const,
           overageCentsPerMinute: 0,
           color: "#1A3F35",
@@ -829,6 +839,7 @@ export function EntradaScreen({
         // sessão ao responsável que tem o saldo e nunca cobra plano avulso.
         planId: usingHourBank || usingPackage || usingChildCredit || usingPackageBalance ? null : planId!,
         useGuardianPackage: usingPackageBalance,
+        allowSiblingPackage: usingSiblingPackage,
         useHourBank: usingHourBank,
         packageId: usingPackage ? selectedPackageId : undefined,
         childCreditId: usingChildCredit ? childCredit?.creditId : undefined,
@@ -1448,11 +1459,12 @@ export function EntradaScreen({
           >
             <strong>
               <Emoji3D e="🎟️" /> Saldo de pacote: {formatPlanoHoras(childPackageMinutes)} disponíveis
+              {siblingPackageMinutes > 0 ? ` (+ ${formatPlanoHoras(siblingPackageMinutes)} de irmão)` : ""}
             </strong>
             <ul style={{ margin: "6px 0 0 0", paddingLeft: "18px" }}>
               {childPackages.map((p) => (
                 <li key={p.package_id}>
-                  {p.package_name}: {formatPlanoHoras(p.remaining_minutes)} de {formatPlanoHoras(p.included_minutes)} · vence{" "}
+                  {p.package_name}{p.is_own === false ? ` (de ${p.owner_child_name ?? "outra criança"})` : ""}: {formatPlanoHoras(p.remaining_minutes)} de {formatPlanoHoras(p.included_minutes)} · vence{" "}
                   {new Date(p.expires_at_ms).toLocaleDateString("pt-BR")}
                 </li>
               ))}
@@ -1485,6 +1497,31 @@ export function EntradaScreen({
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                 {childPackages[0]?.package_name || "Porto Seguro"} · sem custo de entrada
+              </div>
+            </Card>
+          )}
+          {/* Pacote de IRMÃO: opção separada e nunca pré-selecionada. O balcão confirma com o responsável. */}
+          {matchedChild && childPackageMinutes === 0 && siblingPackageMinutes > 0 && activity === "PLAYGROUND" && (
+            <Card
+              onClick={() => setPlanId(SIBLING_PACKAGE_BALANCE)}
+              title="Este saldo foi comprado para outra criança. Só use se o responsável autorizar."
+              style={{
+                cursor: "pointer",
+                padding: "14px 18px",
+                minWidth: "180px",
+                borderRadius: "16px",
+                border: usingSiblingPackage ? "2px solid #B45309" : "2px dashed #B45309",
+                background: usingSiblingPackage ? "rgba(180, 83, 9, 0.12)" : "var(--surface-card)",
+              }}
+            >
+              <strong style={{ fontSize: "16px", display: "block", color: "#B45309" }}>
+                <Emoji3D e="⚠️" /> Usar pacote de {siblingPackages[0]?.owner_child_name ?? "outra criança"}
+              </strong>
+              <div style={{ fontSize: "18px", color: "#B45309", fontWeight: "bold", marginTop: "2px" }}>
+                {formatPlanoHoras(siblingPackageMinutes)} disponíveis
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                Pacote de outra criança · confirme com o responsável
               </div>
             </Card>
           )}
