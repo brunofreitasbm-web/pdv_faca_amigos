@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Input, Select } from "@facaamigos/ui";
 import { Card, FORM_GRID, FULL_ROW } from "../GCard.js";
-import { Api } from "../../../api/client.js";
+import { Api, isWifiClinicCoupon } from "../../../api/client.js";
 import type { Coupon, Plan } from "../../../api/client.js";
 import { useAppState } from "../../../state/AppState.js";
 import { useToast } from "../../../state/ToastContext.js";
@@ -53,7 +53,7 @@ export function CuponsTab() {
   const [scheduleEnd, setScheduleEnd] = useState("17:00");
 
   function load() {
-    Api.couponsAllUnits().then(setCoupons);
+    Api.couponsAllUnits().then((list) => setCoupons(list.filter((c) => !isWifiClinicCoupon(c.code))));
     Api.plansAllUnits().then(setPlans);
   }
   useEffect(load, []);

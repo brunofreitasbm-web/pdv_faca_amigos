@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Ref } from "react";
 import { Button, Input, Tag, HelpText, AsyncState, AutismRibbonIcon } from "@facaamigos/ui";
 import { formatAccessCode } from "@facaamigos/domain";
-import { Api } from "../api/client.js";
+import { Api, isWifiClinicCoupon } from "../api/client.js";
 import type { ActiveSessionEntry, ResolvedAccessCode, Package, Coupon } from "../api/client.js";
 import { useActiveSessions } from "../api/useTick.js";
 import { useAppState } from "../state/AppState.js";
@@ -142,7 +142,7 @@ export function SaidaScreen({ entriesOverride }: SaidaScreenProps = {}) {
     if (!unit) return;
     const activity = unit.kind === "QUIOSQUE" ? "CARRINHO" : "PLAYGROUND";
     Api.packages(unit.id, activity).then(setCheckoutPackages);
-    Api.coupons(unit.id).then(setCheckoutCoupons);
+    Api.coupons(unit.id).then((list) => setCheckoutCoupons(list.filter((c) => !isWifiClinicCoupon(c.code))));
   }, [unit?.id, unit?.kind]);
 
   useEffect(() => {

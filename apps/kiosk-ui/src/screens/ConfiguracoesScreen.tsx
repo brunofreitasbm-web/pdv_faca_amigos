@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Card, Input, Select, Tabs, HelpText, Modal, Tag } from "@facaamigos/ui";
 import { generateEscPosReceipt } from "@facaamigos/domain";
-import { Api } from "../api/client.js";
+import { Api, isWifiClinicCoupon } from "../api/client.js";
 import type {
   Asset,
   Coupon,
@@ -976,7 +976,7 @@ function CuponsTab({ unitId }: { unitId: string }) {
   const [busy, setBusy] = useState(false);
 
   function load() {
-    Api.coupons(unitId).then(setCoupons);
+    Api.coupons(unitId).then((list) => setCoupons(list.filter((c) => !isWifiClinicCoupon(c.code))));
   }
   useEffect(load, [unitId]);
 

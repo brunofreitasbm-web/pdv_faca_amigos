@@ -1229,6 +1229,16 @@ export interface Coupon {
   unitId?: string;
 }
 
+/**
+ * Cupons do Wi-Fi da clínica (ESPERA-XXXX): o cliente apresenta o código ao
+ * operador, que o digita no campo "Cupom do Wi-Fi da clínica". Não entram nas
+ * listas de escolha (parceria, IA, gerencial) para não poluí-las; o sistema
+ * continua validando-os via `wifiCouponLookup` e no check-in.
+ */
+export function isWifiClinicCoupon(code: string | null | undefined): boolean {
+  return (code ?? "").trim().toUpperCase().startsWith("ESPERA-");
+}
+
 export interface CouponScheduleInput {
   scheduleDays?: number[] | null;
   scheduleStart?: string | null;

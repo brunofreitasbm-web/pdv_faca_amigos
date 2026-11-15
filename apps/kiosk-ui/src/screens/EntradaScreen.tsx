@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Button, Checkbox, Input, Select, DateInput, Tag, Badge, HelpText, Modal, StatusBadge, AutismRibbonIcon } from "@facaamigos/ui";
-import { Api, isCouponInSchedule } from "../api/client.js";
+import { Api, isCouponInSchedule, isWifiClinicCoupon } from "../api/client.js";
 import type { Asset, ChildMatch, ChildPackageBalance, Coupon, ForeignPackageBalance, Package, Plan, Product, PrepaidCreditQueueItem, UpsellOffer, WifiCouponLookup } from "../api/client.js";
 import { UpsellOfferCard } from "../components/UpsellOfferCard.js";
 import { OlharUpsellCard } from "../components/OlharUpsellCard.js";
@@ -656,6 +656,7 @@ export function EntradaScreen({
     () =>
       coupons.filter(
         (c) =>
+          !isWifiClinicCoupon(c.code) &&
           (!c.allowedPlanId || c.allowedPlanId === planId) &&
           isCouponInSchedule(c) &&
           !(c.expiresAtMs && c.expiresAtMs < Date.now()),
