@@ -3,6 +3,8 @@ import { Button, BrandLockup } from "@facaamigos/ui";
 import { useAppState } from "../../state/AppState.js";
 import { RequireCapability } from "../../auth/RequireCapability.js";
 import { ROLE_LABEL } from "../../auth/capabilities.js";
+import type { Capability } from "../../auth/capabilities.js";
+import { useAuth } from "../../auth/AuthContext.js";
 import { PlanosTab } from "./tabs/PlanosTab.js";
 import { PacotesTab } from "./tabs/PacotesTab.js";
 import { ProdutosTab } from "./tabs/ProdutosTab.js";
@@ -79,6 +81,8 @@ interface ModuleItem {
   icon: string;
   tag?: string;
   description: string;
+  /** Item escondido de quem não tem a capacidade (só conveniência; o servidor decide). */
+  capability?: Capability;
 }
 
 interface ModuleCategory {
@@ -143,7 +147,7 @@ const CATEGORIES: ModuleCategory[] = [
       { value: "ANIVERSARIO_CORTESIA", label: "Cortesia de aniversário", icon: "🎂", tag: "Novo", description: "30 min grátis no Playground: quem recebeu, quem usou, minutos adicionais cobrados, quem comprou depois e a comparação com o grupo de controle." },
       { value: "RELATORIOS_SESSAO", label: "Olhar FaçaAmigos", icon: "📝", tag: "Novo", description: "Mapa de observação de cada visita de 1h+, quem preencheu, prazo de 40 min e a mensagem enviada ao responsável." },
       { value: "PERMISSOES", label: "Permissões de Acesso", icon: "🔒", description: "Nível de acesso (Operador, Líder ou Owner) exigido por ação." },
-      { value: "APARELHOS", label: "Aparelhos", icon: "📱", tag: "Novo", description: "Cadastro dos terminais, navegadores e celulares que podem abrir a tela de PIN." },
+      { value: "APARELHOS", label: "Aparelhos", icon: "📱", tag: "Novo", capability: "dispositivos.manage", description: "Cadastro dos terminais, navegadores e celulares que podem abrir a tela de PIN." },
     ],
   },
   {
@@ -178,6 +182,7 @@ const ALL_ITEMS: (ModuleItem & { categoryLabel: string })[] = CATEGORIES.flatMap
 
 export function GerencialApp({ onExit, onLogout }: { onExit: () => void; onLogout: () => void | Promise<void> }) {
   const { employee } = useAppState();
+  const { can } = useAuth();
   const [tab, setTab] = useState<GerencialTab>("COPILOT_IA");
   const [activeCategory, setActiveCategory] = useState<string>(() => ITEM_TO_CATEGORY["COPILOT_IA"] || "visao_geral");
   const [searchQuery, setSearchQuery] = useState("");
@@ -188,9 +193,19 @@ export function GerencialApp({ onExit, onLogout }: { onExit: () => void; onLogou
     setActiveCategory(catId);
   };
 
+  // Menu só com o que o colaborador pode usar (ex.: Aparelhos é só do Owner).
+  const categories = useMemo(
+    () => CATEGORIES.map((c) => ({ ...c, items: c.items.filter((i) => !i.capability || can(i.capability)) })),
+    [can],
+  );
+  const allItems = useMemo(
+    () => categories.flatMap((cat) => cat.items.map((item) => ({ ...item, categoryLabel: cat.label }))),
+    [categories],
+  );
+
   const handleSelectCategory = (catId: string) => {
     setActiveCategory(catId);
-    const cat = CATEGORIES.find((c) => c.id === catId);
+    const cat = categories.find((c) => c.id === catId);
     if (cat && cat.items.length > 0) {
       const currentItemInCat = cat.items.find((i) => i.value === tab);
       if (!currentItemInCat) {
@@ -203,22 +218,22 @@ export function GerencialApp({ onExit, onLogout }: { onExit: () => void; onLogou
   };
 
   const currentCategory: ModuleCategory = useMemo(() => {
-    const found = CATEGORIES.find((c) => c.id === activeCategory);
-    return found ? found : (CATEGORIES[0] as ModuleCategory);
-  }, [activeCategory]);
+    const found = categories.find((c) => c.id === activeCategory);
+    return found ? found : (categories[0] as ModuleCategory);
+  }, [activeCategory, categories]);
 
   const currentItem: ModuleItem = useMemo(() => {
-    const found = ALL_ITEMS.find((i) => i.value === tab);
-    return found ? found : (ALL_ITEMS[0] as ModuleItem);
-  }, [tab]);
+    const found = allItems.find((i) => i.value === tab);
+    return found ? found : (allItems[0] as ModuleItem);
+  }, [tab, allItems]);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase().trim();
-    return ALL_ITEMS.filter(
+    return allItems.filter(
       (item) => item.label.toLowerCase().includes(q) || item.description.toLowerCase().includes(q) || item.categoryLabel.toLowerCase().includes(q)
     );
-  }, [searchQuery]);
+  }, [searchQuery, allItems]);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--background-default, var(--surface-sunken))" }}>
@@ -382,7 +397,7 @@ export function GerencialApp({ onExit, onLogout }: { onExit: () => void; onLogou
         >
           {/* Categorias: uma linha de abas */}
           <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-            {CATEGORIES.map((cat) => {
+            {categories.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
                 <button
@@ -490,7 +505,7 @@ export function GerencialApp({ onExit, onLogout }: { onExit: () => void; onLogou
               {tab === "COLABORADORES" && <ColaboradoresTab />}
               {tab === "OCORRENCIAS" && <OcorrenciasTab />}
               {tab === "PERMISSOES" && <PermissoesTab />}
-              {tab === "APARELHOS" && <AparelhosTab />}
+              {tab === "APARELHOS" && can("dispositivos.manage") && <AparelhosTab />}
               {tab === "CLIENTES" && <ClientesTab />}
               {tab === "CRM_WHATSAPP" && <CrmWhatsappTab />}
               {tab === "ANIVERSARIO_CORTESIA" && <AniversarioCortesiaTab />}
