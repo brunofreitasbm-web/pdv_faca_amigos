@@ -5,6 +5,7 @@ export type Screen =
   | "SAIDA"
   | "PAINEL"
   | "RELATORIO_SESSAO"
+  | "AVALIACOES"
   | "PDV"
   | "CAIXA"
   | "ANIVERSARIOS"
@@ -25,6 +26,8 @@ export const SCREEN_CAPABILITY: Record<Screen, Capability> = {
   SAIDA: "sessao.checkout",
   PAINEL: "sessao.checkout",
   RELATORIO_SESSAO: "relatorio_sessao.write",
+  // Chegou/Saiu (.presenca) é um botão dentro da tela, não a porta de entrada dela.
+  AVALIACOES: "avaliacao_playground.write",
   PDV: "pdv.sell",
   CAIXA: "caixa.open_close",
   ANIVERSARIOS: "relatorio.read",

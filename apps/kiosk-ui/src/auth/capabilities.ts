@@ -46,6 +46,8 @@ export const CAPABILITIES = [
   "crm.admin",
   "relatorio_sessao.write",
   "relatorio_sessao.read",
+  "avaliacao_playground.write",
+  "avaliacao_playground.presenca",
   "chat.usar",
 ] as const;
 
@@ -91,6 +93,8 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   "crm.admin": "Gerenciar números (canais) e templates do CRM de WhatsApp",
   "relatorio_sessao.write": "Preencher o Olhar FaçaAmigos (crianças com plano de 1h ou mais)",
   "relatorio_sessao.read": "Ver o histórico do Olhar FaçaAmigos no Gerencial",
+  "avaliacao_playground.write": "Preencher a Avaliação no playground (itens e evolução)",
+  "avaliacao_playground.presenca": "Marcar chegada e saída da criança na Avaliação no playground",
   "chat.usar": "Usar o chat interno com os donos (botão flutuante)",
 };
 
@@ -174,16 +178,18 @@ export function getDefaultCapabilitiesForRole(role: Role): Set<Capability> {
       "nfse.emit",
       "nfce.retry",
       "relatorio_sessao.write",
+      "avaliacao_playground.write",
+      "avaliacao_playground.presenca",
       "chat.usar",
     ]);
   }
 
   if (role === "ESTAGIARIO") {
-    return new Set(["ponto.self", "bonificacao.self", "relatorio_sessao.write", "chat.usar"]);
+    return new Set(["ponto.self", "bonificacao.self", "relatorio_sessao.write", "avaliacao_playground.write", "chat.usar"]);
   }
 
   if (role === "PRESTADOR_PJ") {
-    return new Set(["ponto.self", "sessao.checkin", "sessao.checkout", "relatorio_sessao.write"]);
+    return new Set(["ponto.self", "sessao.checkin", "sessao.checkout", "relatorio_sessao.write", "avaliacao_playground.write"]);
   }
 
   return new Set(CAPABILITIES);

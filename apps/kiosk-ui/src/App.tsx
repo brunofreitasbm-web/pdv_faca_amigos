@@ -35,6 +35,7 @@ import {
   EntradaScreen,
   SaidaScreen,
   RelatorioSessaoScreen,
+  AvaliacoesScreen,
   PdvScreen,
   CaixaScreen,
   MinhaBonificacaoScreen,
@@ -49,6 +50,9 @@ import { LoginScreen } from "./screens/LoginScreen.js";
 import { SelectModuleScreen } from "./screens/SelectModuleScreen.js";
 import { PainelScreen } from "./screens/PainelScreen.js";
 import { PendingSessionReportsBadge } from "./components/session-report/PendingSessionReportsBadge.js";
+import { PlaygroundBadge } from "./components/playground/PlaygroundBadge.js";
+import { usePlaygroundOverdueAlerts } from "./hooks/usePlaygroundOverdueAlerts.js";
+import { isFixedTabletUser } from "./lib/playgroundEval.js";
 import { parseTapReturn } from "./lib/infinitepayTap.js";
 import { ConnectDeviceModal } from "./components/ConnectDeviceModal.js";
 import { ConnectionStatusChip } from "./components/ConnectionStatusChip.js";
@@ -77,6 +81,7 @@ const SCREENS: ReadonlyArray<{ value: Screen; label: string; help: string; icon:
   // PainelScreen.tsx) — evita duas entradas concorrentes para a mesma ação.
   { value: "PAINEL", label: "Painel", help: "Ver todas as crianças que estão no espaço agora, quanto tempo já ficaram e fechar o atendimento (cobrar) quando forem embora", icon: <GridIcon /> },
   { value: "RELATORIO_SESSAO", label: "Olhar FaçaAmigos", help: "Preencher o mapa de observação das crianças com plano de 1h ou mais, até 40 minutos depois da saída, e enviar o Olhar FaçaAmigos ao responsável por WhatsApp", icon: <span><Emoji3D e="📝" /></span> },
+  { value: "AVALIACOES", label: "Avaliações", help: "Marcar a chegada e a saída das crianças do playground e preencher a avaliação de cada uma", icon: <span><Emoji3D e="🧩" /></span> },
   { value: "PDV", label: "PDV", help: "Vender produtos avulsos (loja/lanchonete), sem estar ligado a uma entrada", icon: <ShoppingCartIcon /> },
   { value: "CAIXA", label: "Caixa", help: "Abrir e fechar o turno de caixa, conferir o dinheiro e registrar sangria/suprimento", icon: <WalletIcon /> },
   { value: "MINHA_BONIFICACAO", label: "Minha Bonificação", help: "Consultar só os seus números do programa de bonificação: ticket médio, progresso da meta e acumulado do mês. Somente consulta.", icon: <span><Emoji3D e="🎮" /></span> },
@@ -89,6 +94,7 @@ const SCREEN_COMPONENTS: Record<Screen, ComponentType> = {
   SAIDA: SaidaScreen,
   PAINEL: PainelScreen,
   RELATORIO_SESSAO: RelatorioSessaoScreen,
+  AVALIACOES: AvaliacoesScreen,
   PDV: PdvScreen,
   CAIXA: CaixaScreen,
   ANIVERSARIOS: AniversariosScreen,
@@ -183,6 +189,8 @@ export function App() {
   // de módulo etc.) porque o gesto de arrastar já precisa dele — hooks não
   // podem vir depois de um `return` condicional.
   const visibleScreens = SCREENS.filter((s) => can(SCREEN_CAPABILITY[s.value]));
+  // Tablet fixo do playground: só enxerga a aba Avaliações, então abre direto nela e some com o menu.
+  const fixedTablet = isFixedTabletUser(visibleScreens.map((s) => s.value));
 
   const handleGoBack = useCallback(() => {
     if (showConnectModal) {
@@ -273,6 +281,7 @@ export function App() {
 
   usePrintFailureAlerts(unit?.id ?? null);
   useSessionReportFailureAlerts(unit?.id ?? null);
+  usePlaygroundOverdueAlerts(unit?.id ?? null, !!employee && (can("avaliacao_playground.write") || can("avaliacao_playground.presenca")));
 
   const swipeHandlers = useSwipeNavigation(
     () => {
@@ -426,6 +435,7 @@ export function App() {
     CAIXA: "Caixa",
     PDV: "PDV",
     RELATORIO_SESSAO: "Olhar FaçaAmigos",
+    AVALIACOES: "Avaliações",
     MINHA_BONIFICACAO: "Minha Bonificação",
     RELATORIO: "Relatórios",
     CONFIGURACOES: "Configurações",
@@ -506,7 +516,7 @@ export function App() {
         {/* Só aparece em telas de celular (ver .kiosk-nav-toggle no
             app.css) — no computador o menu completo já cabe ao lado da
             marca e fica sempre aberto. */}
-        <button
+        {!fixedTablet && <button
           type="button"
           className="kiosk-nav-toggle"
           onClick={() => setNavOpen((open) => !open)}
@@ -530,9 +540,9 @@ export function App() {
           }}
         >
           {navOpen ? <XIcon /> : <ListIcon />}
-        </button>
+        </button>}
 
-        <nav id="kiosk-nav-menu" className={`kiosk-nav${navOpen ? " is-open" : ""}`} style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginLeft: "12px" }}>
+        {!fixedTablet && <nav id="kiosk-nav-menu" className={`kiosk-nav${navOpen ? " is-open" : ""}`} style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginLeft: "12px" }}>
           {/* Esconder o que o colaborador não pode fazer é UX, não segurança:
               quem protege é a RLS e as RPCs fa_config_*. Por isso a tela em
               si também é guardada logo abaixo, com <RequireCapability>.
@@ -555,6 +565,7 @@ export function App() {
             >
               {s.icon} {s.label}
               {s.value === "RELATORIO_SESSAO" && <PendingSessionReportsBadge unitId={unit.id} />}
+              {s.value === "AVALIACOES" && <PlaygroundBadge unitId={unit.id} />}
               {!mobile.isPhone && (
                 <kbd className="kiosk-nav-kbd" style={{ marginLeft: "6px", fontSize: "10px", padding: "2px 4px", borderRadius: "4px", background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)", color: "var(--text-muted)" }}>
                   Alt+{index + 1}
@@ -562,7 +573,7 @@ export function App() {
               )}
             </Button>
           ))}
-        </nav>
+        </nav>}
 
         <div className="kiosk-header-right" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
           <ConnectionStatusChip />

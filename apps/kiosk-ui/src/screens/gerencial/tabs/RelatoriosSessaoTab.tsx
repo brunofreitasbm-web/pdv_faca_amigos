@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, HelpText, Modal, Select } from "@facaamigos/ui";
 import {
-  EMPLOYEE_SECTORS,
-  EMPLOYEE_SECTOR_LABEL,
+  EMPLOYEE_SECTOR_OPTIONS,
+  EMPLOYEE_SECTOR_OPTION_LABEL,
   SESSION_REPORT_CATALOG,
   sessionReportProgress,
-  type EmployeeSector,
+  type EmployeeSectorOption,
 } from "@facaamigos/domain";
 import { Api, type SessionReportRow, type SessionReportWhatsappStatus } from "../../../api/client.js";
 import { isWhatsappRefusal63049 } from "../../../api/useSessionReports.js";
@@ -54,7 +54,7 @@ function Content() {
   const toast = useToast();
   const [unitId, setUnitId] = useState("");
   const [days, setDays] = useState("30");
-  const [sector, setSector] = useState<"" | EmployeeSector>("");
+  const [sector, setSector] = useState<"" | EmployeeSectorOption>("");
   const [status, setStatus] = useState<"" | SessionReportWhatsappStatus>("");
   const [rows, setRows] = useState<SessionReportRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,10 +166,10 @@ function Content() {
             <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </Select>
-        <Select aria-label="Setor de quem preencheu" value={sector} onChange={(e) => setSector(e.target.value as "" | EmployeeSector)}>
+        <Select aria-label="Setor de quem preencheu" value={sector} onChange={(e) => setSector(e.target.value as "" | EmployeeSectorOption)}>
           <option value="">Todos os setores</option>
-          {EMPLOYEE_SECTORS.map((s) => (
-            <option key={s} value={s}>{EMPLOYEE_SECTOR_LABEL[s]}</option>
+          {EMPLOYEE_SECTOR_OPTIONS.map((s) => (
+            <option key={s} value={s}>{EMPLOYEE_SECTOR_OPTION_LABEL[s]}</option>
           ))}
         </Select>
         <Select aria-label="Situação do envio" value={status} onChange={(e) => setStatus(e.target.value as "" | SessionReportWhatsappStatus)}>
@@ -234,7 +234,7 @@ function Content() {
                 <td>{dt(r.session_checkout_at_ms)}</td>
                 <td>
                   {r.employee?.full_name ?? "—"}
-                  {r.filled_by_sector_snapshot ? ` · ${EMPLOYEE_SECTOR_LABEL[r.filled_by_sector_snapshot]}` : ""}
+                  {r.filled_by_sector_snapshot ? ` · ${EMPLOYEE_SECTOR_OPTION_LABEL[r.filled_by_sector_snapshot]}` : ""}
                 </td>
                 <td>{r.late ? <Badge variant="amber">Atrasado</Badge> : <Badge variant="teal">No prazo</Badge>}</td>
                 <td>{sessionReportProgress(r.answers).answered}/{sessionReportProgress(r.answers).total}</td>
@@ -258,7 +258,7 @@ function Content() {
               {detail.late ? " (fora do prazo)" : ""}
               <br />
               Por {detail.employee?.full_name ?? "—"}
-              {detail.filled_by_sector_snapshot ? ` (${EMPLOYEE_SECTOR_LABEL[detail.filled_by_sector_snapshot]})` : ""}
+              {detail.filled_by_sector_snapshot ? ` (${EMPLOYEE_SECTOR_OPTION_LABEL[detail.filled_by_sector_snapshot]})` : ""}
               {detail.device_id ? ` · terminal ${detail.device_id.slice(0, 8)}` : ""} · catálogo v{detail.catalog_version}
             </div>
 

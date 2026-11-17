@@ -125,6 +125,10 @@ verify_jwt = false
 [functions.session-report-dispatch]
 verify_jwt = false
 
+# Avaliação no playground: autorização por requireCapability; a ação `flush` é chamada pelo pg_cron (sem JWT).
+[functions.playground-eval-bridge]
+verify_jwt = false
+
 # Conferência de preço/categoria do WhatsApp: só o pg_cron chama (a cada 30 min).
 [functions.crm-whatsapp-cost-sync]
 verify_jwt = false

@@ -33,6 +33,7 @@ export const PdvScreen = named(loaders.pdv, "PdvScreen");
 export const CaixaScreen = named(loaders.caixa, "CaixaScreen");
 
 export const RelatorioSessaoScreen = named(() => import("./screens/RelatorioSessaoScreen.js"), "RelatorioSessaoScreen");
+export const AvaliacoesScreen = named(() => import("./screens/AvaliacoesScreen.js"), "AvaliacoesScreen");
 export const AniversariosScreen = named(() => import("./screens/AniversariosScreen.js"), "AniversariosScreen");
 export const MinhaBonificacaoScreen = named(() => import("./screens/MinhaBonificacaoScreen.js"), "MinhaBonificacaoScreen");
 export const RelatorioScreen = named(() => import("./screens/RelatorioScreen.js"), "RelatorioScreen");

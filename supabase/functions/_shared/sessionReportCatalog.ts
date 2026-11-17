@@ -34,6 +34,29 @@ export const EMPLOYEE_SECTOR_LABEL: Record<EmployeeSector, string> = {
   PEDAGOGIA: "Pedagogia",
 };
 
+/**
+ * Setores que o colaborador pode ter mas que NÃO têm itens no Olhar (o Olhar é uma
+ * lista única de 16 itens, igual para todos). Hoje só a Avaliação do playground usa
+ * estes setores, para rotular a especialidade de quem preencheu. Ficam fora de
+ * EMPLOYEE_SECTORS de propósito: o catálogo, o resumo por área e o PDF do Olhar
+ * iteram sobre EMPLOYEE_SECTORS e não podem ganhar uma área sem itens.
+ */
+export const EXTRA_EMPLOYEE_SECTORS = ["FISIOTERAPIA"] as const;
+
+/** Todos os setores que se pode atribuir a um colaborador (seletor de Colaboradores). */
+export const EMPLOYEE_SECTOR_OPTIONS = [...EMPLOYEE_SECTORS, ...EXTRA_EMPLOYEE_SECTORS] as const;
+export type EmployeeSectorOption = (typeof EMPLOYEE_SECTOR_OPTIONS)[number];
+
+export const EMPLOYEE_SECTOR_OPTION_LABEL: Record<EmployeeSectorOption, string> = {
+  ...EMPLOYEE_SECTOR_LABEL,
+  FISIOTERAPIA: "Fisioterapia",
+};
+
+/** Verdadeiro quando o setor tem itens no Olhar. Setor sem itens (Fisioterapia) nunca filtra nem esconde nada no formulário. */
+export function sectorHasOlharItems(sector: string | null | undefined): sector is EmployeeSector {
+  return (EMPLOYEE_SECTORS as readonly string[]).includes(sector ?? "");
+}
+
 export interface SessionReportItem {
   key: string;
   label: string;
