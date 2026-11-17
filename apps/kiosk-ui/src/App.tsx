@@ -21,7 +21,7 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.js";
 import { usePrintFailureAlerts } from "./hooks/usePrintFailureAlerts.js";
 import { useSessionReportFailureAlerts } from "./hooks/useSessionReportFailureAlerts.js";
 import { useAppState } from "./state/AppState.js";
-import { useHasDeviceToken } from "./lib/supabase/deviceToken.js";
+import { useDeviceEnrollRequired } from "./lib/supabase/deviceToken.js";
 import { DeviceEnrollScreen } from "./screens/DeviceEnrollScreen.js";
 import { useConfirm } from "./state/ConfirmContext.js";
 import { useAuth } from "./auth/AuthContext.js";
@@ -118,7 +118,7 @@ export function App() {
   // guarda a tela completa que ele pediu de dentro dela (Saída, Caixa…).
   // Enquanto for null, quem manda no celular é a casca.
   const mobile = useMobileShell();
-  const hasDeviceToken = useHasDeviceToken();
+  const deviceEnrollRequired = useDeviceEnrollRequired();
   const [mobileEscape, setMobileEscape] = useState<Screen | null>(null);
 
   // Com o operador logado e o app interativo, baixa em segundo plano os chunks
@@ -371,9 +371,10 @@ export function App() {
   // MobileLogin usa exatamente os mesmos useAppState()/Api.employeesForLogin
   // de LoginScreen, só com a casca do modo celular.
   if (!employee) {
-    // Primeira camada: aparelho cadastrado pela unidade. O servidor também
-    // exige (list-employees/login-pin); isto só evita a tela de PIN morta.
-    if (!hasDeviceToken) return <DeviceEnrollScreen />;
+    // Primeira camada: aparelho cadastrado pela unidade. Quem decide é o
+    // servidor (list-employees/login-pin devolvem device_not_enrolled); a
+    // tela de ativação só aparece depois dessa recusa.
+    if (deviceEnrollRequired) return <DeviceEnrollScreen />;
     return mobile.active ? <MobileLogin /> : <LoginScreen />;
   }
 

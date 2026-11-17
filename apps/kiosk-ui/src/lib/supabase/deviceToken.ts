@@ -12,6 +12,9 @@ import { useSyncExternalStore } from "react";
 const STORAGE_KEY = "fa_kiosk_device_token";
 
 let cached: string | null = null;
+// Só vira true quando o SERVIDOR recusa o aparelho (gate ligado). Em modo
+// transição o app abre normal, para o Owner entrar e gerar os códigos.
+let required = false;
 const listeners = new Set<() => void>();
 
 function readLocal(): string | null {
@@ -62,6 +65,7 @@ export function getDeviceToken(): string | null {
 
 export async function setDeviceToken(token: string): Promise<void> {
   cached = token;
+  required = false;
   writeLocal(token);
   try {
     await (typeof window !== "undefined" ? window.facaamigos?.deviceToken?.set(token) : undefined);
@@ -93,18 +97,24 @@ export async function isDeviceRejected(error: unknown): Promise<boolean> {
   if (!(ctx instanceof Response) || ctx.status !== 401) return false;
   try {
     const body = (await ctx.clone().json()) as { error?: string };
-    return body.error === "device_not_enrolled";
+    const rejected = body.error === "device_not_enrolled";
+    if (rejected) {
+      required = true;
+      emit();
+    }
+    return rejected;
   } catch {
     return false;
   }
 }
 
-export function useHasDeviceToken(): boolean {
+/** True quando o servidor exigiu aparelho e este ainda não tem token válido. */
+export function useDeviceEnrollRequired(): boolean {
   return useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
-    () => cached !== null,
+    () => required && cached === null,
   );
 }

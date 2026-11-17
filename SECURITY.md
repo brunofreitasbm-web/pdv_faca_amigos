@@ -72,6 +72,8 @@ em Gerencial > Aparelhos; cada aparelho pode ser revogado sozinho.
 
 Implantação (a ordem importa, senão trava a loja):
 
+0. O app só mostra a tela de ativação depois que o servidor recusa o aparelho
+   (gate ligado). Antes disso, o Owner entra normalmente com o PIN.
 1. Aplicar a migration `20261117150000_fa_kiosk_devices.sql`, fazer deploy de
    `device-enroll`, `device-admin`, `list-employees`, `login-pin`, e do app.
    Sem `DEVICE_GATE_ENFORCE` o gate só registra no log (modo transição).
