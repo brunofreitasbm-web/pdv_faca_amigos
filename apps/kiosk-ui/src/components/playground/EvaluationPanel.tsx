@@ -298,21 +298,13 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
   const previousEvolutions = (series?.evolutions ?? []).filter((e) => e.visitId === visit.visitId);
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", justifyContent: "flex-end" }}>
-      <div
-        aria-hidden="true"
-        onClick={() => {
-          batcher.flushNow();
-          onClose();
-        }}
-        style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.35)" }}
-      />
+    <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex" }}>
       <aside
         role="dialog"
         aria-label={`Avaliação de ${visit.displayName}`}
-        style={{ position: "relative", width: "min(600px, 100vw)", height: "100%", display: "flex", flexDirection: "column", background: "var(--surface-page, #fff)", boxShadow: "-8px 0 24px rgba(0,0,0,.2)" }}
+        style={{ position: "relative", width: "100%", height: "100dvh", display: "flex", flexDirection: "column", background: "var(--surface-page, #fff)" }}
       >
-        <header style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 18px", borderBottom: "1px solid var(--border-subtle)" }}>
+        <header style={{ display: "flex", alignItems: "center", gap: "12px", padding: "max(14px, env(safe-area-inset-top)) 20px 14px", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-card, #fff)" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: "22px", fontWeight: 800 }}>{visit.displayName}</div>
             <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>
@@ -332,9 +324,10 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
           </button>
         </header>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ width: "100%", maxWidth: "880px", margin: "0 auto", boxSizing: "border-box", padding: "16px 20px 24px", display: "flex", flexDirection: "column", gap: "18px" }}>
           {/* Quem está avaliando */}
-          <section aria-label="Quem está avaliando">
+          <section aria-label="Quem está avaliando" style={{ background: "var(--surface-card, #fff)", border: "1px solid var(--border-subtle)", borderRadius: "14px", padding: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "6px" }}>Quem está avaliando</div>
             {freeAuthor ? (
               freeConfirmed ? (
@@ -382,7 +375,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
                 </div>
               )
             ) : therapists.length === 0 ? (
-              <div style={{ fontSize: "14px", color: "var(--text-muted)" }}>Nenhum profissional cadastrado para esta unidade: peça ao responsável para cadastrar.</div>
+              <div role="note" style={{ fontSize: "14px", color: "var(--text-secondary)", padding: "10px 12px", borderRadius: "10px", border: "1px solid var(--color-amber, #d9a400)", background: "var(--surface-sunken)" }}>Nenhum profissional cadastrado para esta unidade: peça ao responsável para cadastrar.</div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 {therapists.map((t) => {
@@ -421,7 +414,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
             const answered = d.items.filter((i) => (overrides[i.id] ? overrides[i.id]!.score !== null : serverByItem.has(i.id))).length;
             const open = !!openDomains[d.domain];
             return (
-              <section key={d.domain} style={{ border: "1px solid var(--border-subtle)", borderRadius: "14px", overflow: "hidden" }}>
+              <section key={d.domain} style={{ border: "1px solid var(--border-subtle)", borderRadius: "14px", overflow: "hidden", background: "var(--surface-card, #fff)" }}>
                 <button
                   type="button"
                   aria-expanded={open}
@@ -435,7 +428,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
                   </span>
                 </button>
                 {open && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "14px", padding: "12px 14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "16px 20px", padding: "14px" }}>
                     {d.items.map((item) => {
                       const ov = overrides[item.id];
                       const server = serverByItem.get(item.id);
@@ -457,7 +450,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
           {!author && (therapists.length > 0 || freeAuthor) && <div style={{ fontSize: "14px", color: "var(--text-muted)" }}>{freeAuthor ? "Informe seu nome e especialidade e toque em OK para marcar os itens." : "Escolha quem está avaliando para marcar os itens."}</div>}
 
           {/* Evolução */}
-          <section aria-label="Evolução" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <section aria-label="Evolução" style={{ display: "flex", flexDirection: "column", gap: "10px", background: "var(--surface-card, #fff)", border: "1px solid var(--border-subtle)", borderRadius: "14px", padding: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-secondary)" }}>Evolução da visita</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               {voice.state === "recording" ? (
@@ -479,7 +472,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
               value={evoText}
               onChange={(e) => setEvoText(e.target.value)}
               placeholder="Escreva ou fale como foi a visita"
-              style={{ width: "100%", minHeight: "84px", padding: "10px 12px", borderRadius: "12px", border: "1px solid var(--border-subtle)", fontFamily: "inherit", fontSize: "16px", resize: "vertical" }}
+              style={{ width: "100%", boxSizing: "border-box", minHeight: "120px", padding: "10px 12px", borderRadius: "12px", border: "1px solid var(--border-subtle)", fontFamily: "inherit", fontSize: "16px", resize: "vertical" }}
             />
             {previousEvolutions.length > 0 && (
               <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
@@ -492,8 +485,9 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
             )}
           </section>
         </div>
+        </div>
 
-        <footer style={{ padding: "12px 18px", borderTop: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", gap: "8px" }}>
+        <footer style={{ padding: "12px 20px max(12px, env(safe-area-inset-bottom))", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-card, #fff)", display: "flex", flexDirection: "column", gap: "8px" }}>
           <div role="status" style={{ minHeight: "18px", fontSize: "13px", color: saveState === "saved" ? "var(--color-teal-text, #0b6b5a)" : saveState === "idle" || saveState === "saving" ? "var(--text-muted)" : "var(--color-error-text, #b3261e)" }}>
             {SAVE_TEXT[saveState]}
           </div>
