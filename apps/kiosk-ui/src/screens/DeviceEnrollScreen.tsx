@@ -7,7 +7,7 @@ import { Api } from "../api/client.js";
  * ativado com o código de uso único gerado pelo Owner (Gerencial > Aparelhos).
  * Dura até o Owner revogar o aparelho.
  */
-export function DeviceEnrollScreen() {
+export function DeviceEnrollScreen({ onCancel }: { onCancel?: () => void }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +50,11 @@ export function DeviceEnrollScreen() {
         <Button onClick={() => void submit()} disabled={busy || code.replace(/[^A-Z0-9]/gi, "").length !== 8}>
           {busy ? "Ativando…" : "Ativar aparelho"}
         </Button>
+        {onCancel && (
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>
+            voltar para o PIN
+          </Button>
+        )}
       </Card>
     </div>
   );
