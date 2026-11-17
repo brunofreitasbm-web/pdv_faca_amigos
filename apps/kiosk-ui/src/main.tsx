@@ -22,6 +22,7 @@ void flushOfflineQueue();
 import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { SecretVaultReader } from "./screens/SecretVaultReader.js";
 import { consumeHubSsoTicket } from "./lib/supabase/hubSso.js";
+import { initDeviceToken } from "./lib/supabase/deviceToken.js";
 
 // Depois de um deploy novo na Vercel, uma aba antiga tenta baixar chunks que
 // não existem mais (hash mudou) e o Vite dispara este evento. Recarrega UMA vez
@@ -48,7 +49,7 @@ const isSecretRoute = pathname.startsWith("/segredo/");
 const secretId = isSecretRoute ? pathname.split("/segredo/")[1]?.split("?")[0] : null;
 
 // /sso (entrada pelo Hub de Gestão) troca o ticket por sessão antes do primeiro render.
-void consumeHubSsoTicket().finally(() => createRoot(container).render(
+void Promise.all([initDeviceToken(), consumeHubSsoTicket()]).finally(() => createRoot(container).render(
   <StrictMode>
     <ErrorBoundary>
       <ToastProvider>

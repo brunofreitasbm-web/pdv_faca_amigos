@@ -40,7 +40,7 @@ export function corsHeaders(req: Request): Record<string, string> {
     // Origem não permitida recebe um header que o navegador recusa — a
     // resposta até existe, mas o JS da página nunca a lê.
     "Access-Control-Allow-Origin": allowed.includes(origin) ? origin : allowed[0]!,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-device-token",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };

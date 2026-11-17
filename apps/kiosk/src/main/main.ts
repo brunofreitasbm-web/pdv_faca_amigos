@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { app, BrowserWindow, Menu, ipcMain, dialog, session } from "electron";
+import { app, BrowserWindow, Menu, ipcMain, dialog, session, safeStorage } from "electron";
 import { openDatabase, migrate, ensureDeviceId } from "@facaamigos/db-local";
 import { buildApp } from "../server/app.js";
 import { seedDevData } from "../server/seed-dev.js";
@@ -336,6 +336,26 @@ if (isPrimaryInstance) {
     // Permite colar a chave pela tela Configurações (sem editar .env à mão).
     // IPC e não rota HTTP: o Fastify escuta em 0.0.0.0, e um segredo não pode
     // ser gravável por qualquer tablet da LAN.
+    // Token do aparelho (primeiro fator antes do PIN). Fica em userData, cifrado
+    // com safeStorage quando disponível, e sobrevive à troca http<->https da SPA.
+    const deviceTokenPath = join(app.getPath("userData"), "device-token.bin");
+    ipcMain.handle("device-token-get", () => {
+      try {
+        if (!existsSync(deviceTokenPath)) return null;
+        const raw = readFileSync(deviceTokenPath);
+        return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString("utf8");
+      } catch {
+        return null;
+      }
+    });
+    ipcMain.handle("device-token-set", (_event, token: unknown) => {
+      if (typeof token !== "string" || token.length < 32 || token.length > 128) return;
+      writeFileSync(deviceTokenPath, safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(token) : Buffer.from(token, "utf8"));
+    });
+    ipcMain.handle("device-token-clear", () => {
+      rmSync(deviceTokenPath, { force: true });
+    });
+
     ipcMain.handle("save-terminal-key", (_event, key: unknown) => {
       if (typeof key !== "string" || classifyTerminalKey(key) !== "secret") {
         return { ok: false, error: "Cole a chave secreta que começa com sb_secret_ (não a publicável nem a eyJ...)." };

@@ -62,3 +62,28 @@ Trocar o arquivo não desfaz o vazamento: quem já clonou o repositório, ou tem
 instalador antigo, continua com a chave antiga. **Rotacionar é obrigatório** —
 reescrever o histórico do git não substitui isso, e não alcança clones e forks
 que já existem.
+
+## Aparelhos da unidade (camada antes do PIN)
+
+`list-employees` e `login-pin` só respondem a um aparelho cadastrado (header
+`x-device-token`, conferido por `supabase/functions/_shared/deviceGate.ts`).
+O cadastro é por código de uso único (8 caracteres, 15 min) gerado pelo Owner
+em Gerencial > Aparelhos; cada aparelho pode ser revogado sozinho.
+
+Implantação (a ordem importa, senão trava a loja):
+
+0. O app só mostra a tela de ativação depois que o servidor recusa o aparelho
+   (gate ligado). Antes disso, o Owner entra normalmente com o PIN.
+1. Aplicar a migration `20261117150000_fa_kiosk_devices.sql`, fazer deploy de
+   `device-enroll`, `device-admin`, `list-employees`, `login-pin`, e do app.
+   Sem `DEVICE_GATE_ENFORCE` o gate só registra no log (modo transição).
+2. Entrar como Owner, gerar um código por aparelho e ativar cada terminal e
+   celular. Conferir em Aparelhos o "último uso" de todos.
+3. Só então: `supabase secrets set DEVICE_GATE_ENFORCE=true`.
+
+Perdeu todos os aparelhos: entrar pelo Hub de Gestão (`/sso`, fora do gate) e
+gerar o código, ou rodar `supabase/create_device_code.sql`.
+
+O token fica no aparelho: quem tem o celular desbloqueado ou o Windows do
+balcão tem o primeiro fator, por isso o PIN continua obrigatório e o aparelho
+se revoga na hora.

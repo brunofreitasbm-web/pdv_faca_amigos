@@ -19,6 +19,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { jsonResponse, preflight } from "../_shared/http.ts";
+import { requireDevice } from "../_shared/deviceGate.ts";
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -31,6 +32,9 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  const device = await requireDevice(req, adminClient, "list-employees");
+  if (!device.ok) return device.response;
 
   const { data, error } = await adminClient
     .from("fa_kiosk_employees")

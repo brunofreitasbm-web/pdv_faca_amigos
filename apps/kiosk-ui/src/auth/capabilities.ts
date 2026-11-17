@@ -49,6 +49,7 @@ export const CAPABILITIES = [
   "avaliacao_playground.write",
   "avaliacao_playground.presenca",
   "chat.usar",
+  "dispositivos.manage",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -96,6 +97,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   "avaliacao_playground.write": "Preencher a Avaliação no playground (itens e evolução)",
   "avaliacao_playground.presenca": "Marcar chegada e saída da criança na Avaliação no playground",
   "chat.usar": "Usar o chat interno com os donos (botão flutuante)",
+  "dispositivos.manage": "Cadastrar e revogar aparelhos da unidade (código de ativação)",
 };
 
 /** Papéis como estão no banco. Ver ROLE_LABEL para o que o usuário lê. */

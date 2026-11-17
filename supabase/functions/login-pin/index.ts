@@ -20,6 +20,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import bcrypt from "npm:bcryptjs@2.4.3";
 import { jsonResponse, preflight } from "../_shared/http.ts";
+import { requireDevice } from "../_shared/deviceGate.ts";
 
 interface LoginPinBody {
   employeeId: string;
@@ -71,6 +72,11 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+  // Aparelho cadastrado ANTES de qualquer consulta de PIN/trava: sem ele o
+  // atacante nem chega a gastar tentativa de ninguém.
+  const device = await requireDevice(req, adminClient, "login-pin");
+  if (!device.ok) return device.response;
 
   const nowMs = Date.now();
 
@@ -145,6 +151,7 @@ Deno.serve(async (req) => {
     employee_id: employee.id,
     action: body.context === "STEP_UP" ? "AUTH_STEP_UP_PIN_OK" : "AUTH_LOGIN_PIN_OK",
     severity: "INFO",
+    device_id: device.deviceId,
   });
 
   return jsonResponse(req, {
