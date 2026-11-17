@@ -80,6 +80,7 @@ export function AvaliacoesScreen() {
           domains={data.catalogs[String(open.level)] ?? []}
           series={data.state[open.seriesId]}
           therapists={data.therapists}
+          freeAuthor={data.freeAuthor}
           onClose={() => setOpenVisitId(null)}
           onSaved={() => void refetch()}
         />

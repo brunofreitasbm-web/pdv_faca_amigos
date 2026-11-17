@@ -46,7 +46,22 @@ export interface PlaygroundToday {
   pendingConclusions?: PendingConclusion[];
   state: Record<string, SeriesState>;
   therapists: Therapist[];
+  /** Tablet do avaliador: o profissional digita o nome e escolhe a especialidade (sem cadastro). */
+  freeAuthor?: boolean;
 }
+
+/** Igual a FREE_AUTHOR_SPECIALTIES de supabase/functions/_shared/playgroundBridge.ts. */
+export const FREE_AUTHOR_SPECIALTIES = [
+  "Psicólogo(a)",
+  "Terapeuta Ocupacional",
+  "Educador(a) Físico(a)",
+  "Pedagogo(a)",
+  "Fisioterapeuta",
+  "Fonoaudiólogo(a)",
+  "Outro",
+] as const;
+
+export interface FreeAuthor { name: string; specialty: string }
 
 export class PlaygroundEvalError extends Error {
   constructor(message: string, readonly code: string, readonly offline = false) {
@@ -105,6 +120,16 @@ const BADGE_STATUSES: ReadonlySet<VisitStatus> = new Set(["avaliar_agora", "atra
 /** Selo da navegação: Avaliar agora + Atrasada + Confirmar saída + Conclusão pendente. */
 export function badgeCount(visits: readonly PlaygroundVisit[], pending: readonly PendingConclusion[] | undefined): number {
   return visits.filter((v) => BADGE_STATUSES.has(v.status)).length + (pending?.length ?? 0);
+}
+
+/** Total do selo: avaliações agendadas para hoje (canceladas ficam de fora). */
+export function badgeTotal(visits: readonly PlaygroundVisit[]): number {
+  return visits.filter((v) => v.status !== "cancelada").length;
+}
+
+/** O selo pisca só quando há ação a tomar (avaliar agora, atrasada, confirmar saída ou conclusão pendente). */
+export function badgeBlinks(visits: readonly PlaygroundVisit[], pending: readonly PendingConclusion[] | undefined): boolean {
+  return badgeCount(visits, pending) > 0;
 }
 
 /** Selo vermelho quando há algo atrasado ou com conclusão pendente. */
@@ -284,6 +309,33 @@ export function saveLastTherapist(unitId: string, therapistId: string, storage?:
   } catch {
     /* sem memória do último usado */
   }
+}
+
+const freeAuthorKey = (unitId: string) => `fa-playground-free-author-${unitId}`;
+
+/** Último nome e especialidade usados neste tablet (só lembra; o profissional confirma com OK). */
+export function loadFreeAuthor(unitId: string, storage?: Pick<Storage, "getItem">): FreeAuthor | null {
+  try {
+    const raw = (storage ?? localStorage).getItem(freeAuthorKey(unitId));
+    const v = raw ? (JSON.parse(raw) as Partial<FreeAuthor>) : null;
+    if (v && typeof v.name === "string" && typeof v.specialty === "string") return { name: v.name, specialty: v.specialty };
+  } catch {
+    /* sem memória */
+  }
+  return null;
+}
+
+export function saveFreeAuthor(unitId: string, a: FreeAuthor, storage?: Pick<Storage, "setItem">): void {
+  try {
+    (storage ?? localStorage).setItem(freeAuthorKey(unitId), JSON.stringify(a));
+  } catch {
+    /* sem memória do último usado */
+  }
+}
+
+export function isValidFreeAuthor(a: FreeAuthor): boolean {
+  const name = a.name.replace(/\s+/g, " ").trim();
+  return name.length >= 2 && name.length <= 80 && (FREE_AUTHOR_SPECIALTIES as readonly string[]).includes(a.specialty);
 }
 
 export function newEntryKey(visitId: string, suffix: string): string {

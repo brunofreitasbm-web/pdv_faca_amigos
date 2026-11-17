@@ -1,12 +1,17 @@
 import { usePlaygroundBadge } from "../../api/usePlaygroundEval.js";
 
-/** Selo da navegação: Avaliar agora + Atrasada + Confirmar saída + Conclusão pendente. */
+/** Selo da navegação: total de avaliações do dia; pisca só quando alguma pede ação. */
 export function PlaygroundBadge({ unitId }: { unitId: string | null }) {
-  const { count, urgent } = usePlaygroundBadge(unitId);
+  const { count, attention, blink, urgent } = usePlaygroundBadge(unitId);
   if (count === 0) return null;
   return (
     <span
-      aria-label={`${count} avaliações precisam de atenção`}
+      className={blink ? "playground-badge-blink" : undefined}
+      aria-label={
+        attention > 0
+          ? `${count} avaliações hoje, ${attention} precisam de atenção`
+          : `${count} avaliações agendadas hoje`
+      }
       style={{
         marginLeft: "6px",
         minWidth: "20px",
