@@ -21,7 +21,7 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.js";
 import { usePrintFailureAlerts } from "./hooks/usePrintFailureAlerts.js";
 import { useSessionReportFailureAlerts } from "./hooks/useSessionReportFailureAlerts.js";
 import { useAppState } from "./state/AppState.js";
-import { useDeviceEnrollRequired } from "./lib/supabase/deviceToken.js";
+import { closeDeviceEnroll, openDeviceEnroll, useDeviceEnrollMode } from "./lib/supabase/deviceToken.js";
 import { DeviceEnrollScreen } from "./screens/DeviceEnrollScreen.js";
 import { useConfirm } from "./state/ConfirmContext.js";
 import { useAuth } from "./auth/AuthContext.js";
@@ -118,7 +118,7 @@ export function App() {
   // guarda a tela completa que ele pediu de dentro dela (Saída, Caixa…).
   // Enquanto for null, quem manda no celular é a casca.
   const mobile = useMobileShell();
-  const deviceEnrollRequired = useDeviceEnrollRequired();
+  const deviceEnrollMode = useDeviceEnrollMode();
   const [mobileEscape, setMobileEscape] = useState<Screen | null>(null);
 
   // Com o operador logado e o app interativo, baixa em segundo plano os chunks
@@ -374,8 +374,35 @@ export function App() {
     // Primeira camada: aparelho cadastrado pela unidade. Quem decide é o
     // servidor (list-employees/login-pin devolvem device_not_enrolled); a
     // tela de ativação só aparece depois dessa recusa.
-    if (deviceEnrollRequired) return <DeviceEnrollScreen />;
-    return mobile.active ? <MobileLogin /> : <LoginScreen />;
+    if (deviceEnrollMode === "required") return <DeviceEnrollScreen />;
+    if (deviceEnrollMode === "manual") return <DeviceEnrollScreen onCancel={closeDeviceEnroll} />;
+    return (
+      <>
+        {mobile.active ? <MobileLogin /> : <LoginScreen />}
+        {/* Fora da lista de PIN de propósito: aparece em todas as etapas do login. */}
+        <button
+          type="button"
+          onClick={openDeviceEnroll}
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+            transform: "translateX(-50%)",
+            background: "none",
+            border: "none",
+            font: "inherit",
+            fontSize: 12,
+            fontWeight: 700,
+            color: "var(--text-muted, #6C7682)",
+            textDecoration: "underline",
+            cursor: "pointer",
+            padding: "8px 12px",
+          }}
+        >
+          Ativar este aparelho
+        </button>
+      </>
+    );
   }
 
   // Modo Gerencial: fora do contexto das 3 unidades, é onde o Owner configura

@@ -15,6 +15,8 @@ let cached: string | null = null;
 // Só vira true quando o SERVIDOR recusa o aparelho (gate ligado). Em modo
 // transição o app abre normal, para o Owner entrar e gerar os códigos.
 let required = false;
+// Abertura manual pelo botão "Ativar aparelho" da tela de PIN.
+let manual = false;
 const listeners = new Set<() => void>();
 
 function readLocal(): string | null {
@@ -66,6 +68,7 @@ export function getDeviceToken(): string | null {
 export async function setDeviceToken(token: string): Promise<void> {
   cached = token;
   required = false;
+  manual = false;
   writeLocal(token);
   try {
     await (typeof window !== "undefined" ? window.facaamigos?.deviceToken?.set(token) : undefined);
@@ -108,13 +111,30 @@ export async function isDeviceRejected(error: unknown): Promise<boolean> {
   }
 }
 
-/** True quando o servidor exigiu aparelho e este ainda não tem token válido. */
-export function useDeviceEnrollRequired(): boolean {
+export function openDeviceEnroll() {
+  manual = true;
+  emit();
+}
+
+export function closeDeviceEnroll() {
+  manual = false;
+  emit();
+}
+
+/**
+ * "required": o servidor recusou o aparelho (gate ligado), não dá para sair.
+ * "manual": o usuário abriu pelo botão da tela de PIN, pode cancelar.
+ */
+export type DeviceEnrollMode = "none" | "required" | "manual";
+
+export function useDeviceEnrollMode(): DeviceEnrollMode {
   return useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
-      return () => listeners.delete(cb);
+      return () => {
+        listeners.delete(cb);
+      };
     },
-    () => required && cached === null,
+    () => (required && cached === null ? "required" : manual ? "manual" : "none"),
   );
 }
