@@ -17,21 +17,19 @@
 //  - Chegou/Saiu usam o colaborador autenticado (o caixa), do banco.
 //  - `savedAt`/`at` do tablet são limitados ao relógio do servidor (+5 min).
 //  - Rede/5xx/timeout em arrive, leave, entries e conclude: a requisição já
-//    montada é CIFRADA (sealed box, chave pública da clínica) e fica na fila
+//    montada é CIFRADA (envelope RSA-OAEP + AES-GCM, chave pública da clínica) e fica na fila
 //    fa_kiosk_playground_eval_outbox. O PDV não consegue ler o que está na fila.
 //    A ação `flush` reenvia com backoff exponencial.
 //  - A transcrição NÃO entra na fila.
 //
 // Secrets: CLINIC_URL, CLINIC_BRIDGE_SECRET, PLAYGROUND_BRIDGE_PUBLIC_KEY.
 //
-// PENDÊNCIA DE CONTRATO (ver relatório): o reenvio da fila usa POST
-// ${CLINIC_URL}/api/playground/sealed com { sealed, idempotencyKey }, onde
-// `sealed` é a requisição original cifrada ({ v, path, body }). A clínica precisa
-// abrir com a chave privada e executar a ação; esse endpoint ainda não está no
-// contrato.
+// Fila cifrada: envelope híbrido RSA-OAEP + AES-GCM (WebCrypto) com a chave pública
+// da clínica (SPKI em PLAYGROUND_BRIDGE_PUBLIC_KEY). Só o envelope e a ação ficam em
+// claro na fila. O reenvio é POST ${CLINIC_URL}/api/playground/replay com { sealed },
+// assinado como as demais; a clínica decifra, executa e devolve a resposta da ação.
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import sodium from "npm:libsodium-wrappers@0.7.15";
 import { jsonResponse, preflight } from "../_shared/http.ts";
 import { requireCapability } from "../_shared/requireCapability.ts";
 import {
@@ -44,10 +42,11 @@ import {
   batchIdempotencyKey,
   classifyClinicStatus,
   clampClientInstant,
-  decodePublicKey,
   friendlyErrorMessage,
   isValidId,
   resolveUnit,
+  parseSpkiPublicKey,
+  sealEnvelope,
   sealedPlaintext,
   sectorLabel,
   signBridgeBody,
@@ -192,14 +191,17 @@ async function resolveAuthor(admin: Admin, unitId: string, authorEmployeeId: unk
 // ---------------------------------------------------------------------
 
 async function seal(plaintext: string): Promise<string | null> {
-  const pk = decodePublicKey(Deno.env.get("PLAYGROUND_BRIDGE_PUBLIC_KEY"));
+  const pk = parseSpkiPublicKey(Deno.env.get("PLAYGROUND_BRIDGE_PUBLIC_KEY"));
   if (!pk) {
     console.error("[playground-bridge] PLAYGROUND_BRIDGE_PUBLIC_KEY ausente ou inválida");
     return null;
   }
-  await sodium.ready;
-  const box = sodium.crypto_box_seal(plaintext, pk);
-  return sodium.to_base64(box, sodium.base64_variants.ORIGINAL);
+  try {
+    return await sealEnvelope(plaintext, pk);
+  } catch (e) {
+    console.error("[playground-bridge] falha ao cifrar", e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 interface Sendable {
@@ -250,9 +252,6 @@ async function sendOrQueue(req: Request, admin: Admin, caller: Caller, s: Sendab
       next_attempt_at_ms: Date.now() + backoffMs(0),
       last_error: res.status === 0 ? "sem conexão" : `HTTP ${res.status}`,
       created_at_ms: Date.now(),
-      clinic_visit_id: s.visitId,
-      evaluator_employee_id: s.evaluatorEmployeeId,
-      device_id: s.deviceId,
     },
     { onConflict: "idempotency_key", ignoreDuplicates: true },
   );
@@ -271,7 +270,7 @@ async function handleFlush(req: Request, admin: Admin): Promise<Response> {
   const now = Date.now();
   const { data: due } = await admin
     .from("fa_kiosk_playground_eval_outbox")
-    .select("id, unit_id, action, payload_sealed, idempotency_key, attempts, next_attempt_at_ms, clinic_visit_id, evaluator_employee_id, device_id")
+    .select("id, unit_id, action, payload_sealed, idempotency_key, attempts, next_attempt_at_ms")
     .lte("next_attempt_at_ms", now)
     .order("created_at_ms", { ascending: true })
     .limit(FLUSH_BATCH);
@@ -290,14 +289,14 @@ async function handleFlush(req: Request, admin: Admin): Promise<Response> {
       .select("id");
     if (!claimed || claimed.length === 0) continue;
 
-    const res = await callClinic("sealed", { sealed: row.payload_sealed, idempotencyKey: row.idempotency_key });
+    const res = await callClinic("replay", { sealed: row.payload_sealed });
     const outcome = classifyClinicStatus(res.status);
     const receipt = {
       unitId: row.unit_id as string,
-      visitId: (row.clinic_visit_id as string | null) ?? "",
+      visitId: "", // a fila guarda só o envelope e a ação: sem visita nem autor em claro
       kind: row.action as string,
-      evaluatorEmployeeId: (row.evaluator_employee_id as string | null) ?? null,
-      deviceId: (row.device_id as string | null) ?? null,
+      evaluatorEmployeeId: null,
+      deviceId: null,
     };
 
     if (outcome === "ok") {

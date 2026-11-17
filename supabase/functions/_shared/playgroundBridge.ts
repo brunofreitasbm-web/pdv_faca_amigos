@@ -183,29 +183,45 @@ export function validateEntries(raw: unknown, nowMs: number): EntriesValidation 
 }
 
 // ---------------------------------------------------------------------
-// Base64 / sealed box (a cifra em si fica no index.ts, que importa a lib)
+// Envelope cifrado da fila (RSA-OAEP + AES-GCM, WebCrypto)
 // ---------------------------------------------------------------------
 
-/** Aceita base64 (padrão ou url-safe) ou hex de 64 caracteres; null se não for uma chave de 32 bytes. */
-export function decodePublicKey(text: string | undefined | null): Uint8Array | null {
-  const t = (text ?? "").trim();
-  if (!t) return null;
-  let bytes: Uint8Array | null = null;
-  if (/^[0-9a-fA-F]{64}$/.test(t)) {
-    bytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) bytes[i] = parseInt(t.slice(i * 2, i * 2 + 2), 16);
-  } else {
-    try {
-      const bin = atob(t.replace(/-/g, "+").replace(/_/g, "/"));
-      bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    } catch {
-      return null;
-    }
-  }
-  return bytes.length === 32 ? bytes : null;
+function b64url(bytes: Uint8Array): string {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** Texto que vai dentro do sealed box: a clínica abre e executa a ação como se tivesse chegado direto. */
-export function sealedPlaintext(path: "visit" | "entries" | "conclude", body: unknown): string {
-  return JSON.stringify({ v: 1, path, body });
+/** Chave pública RSA-2048 em SPKI: base64 do DER ou PEM. null se não decodificar. */
+export function parseSpkiPublicKey(text: string | undefined | null): Uint8Array | null {
+  const t = (text ?? "")
+    .replace(/-----(BEGIN|END) PUBLIC KEY-----/g, "")
+    .replace(/\s+/g, "");
+  if (!t) return null;
+  try {
+    const bin = atob(t.replace(/-/g, "+").replace(/_/g, "/"));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return bytes.length > 0 ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Envelope "v1.<b64url(chave AES cifrada com RSA-OAEP/SHA-256)>.<b64url(iv)>.<b64url(ct||tag)>".
+ * O PDV só tem a chave pública: não consegue abrir o que enfileira.
+ */
+export async function sealEnvelope(plaintext: string, spki: Uint8Array): Promise<string> {
+  const rsa = await crypto.subtle.importKey("spki", spki, { name: "RSA-OAEP", hash: "SHA-256" }, false, ["encrypt"]);
+  const aes = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, enc.encode(plaintext)));
+  const rawKey = await crypto.subtle.exportKey("raw", aes);
+  const wrapped = new Uint8Array(await crypto.subtle.encrypt({ name: "RSA-OAEP" }, rsa, rawKey));
+  return `v1.${b64url(wrapped)}.${b64url(iv)}.${b64url(ct)}`;
+}
+
+/** JSON que vai dentro do envelope: o corpo exato do contrato da ação (com posUnitId e savedAt/at originais). */
+export function sealedPlaintext(action: "visit" | "entries" | "conclude", body: unknown): string {
+  return JSON.stringify({ action, body });
 }

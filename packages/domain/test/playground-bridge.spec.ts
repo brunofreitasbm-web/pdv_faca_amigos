@@ -6,7 +6,8 @@ import {
   batchIdempotencyKey,
   classifyClinicStatus,
   clampClientInstant,
-  decodePublicKey,
+  parseSpkiPublicKey,
+  sealEnvelope,
   friendlyErrorMessage,
   isTransientStatus,
   resolveUnit,
@@ -112,15 +113,33 @@ describe("fila e mensagens", () => {
     expect(await batchIdempotencyKey("v1", ["b", "a"])).toBe(await batchIdempotencyKey("v1", ["a", "b"]));
     expect(await batchIdempotencyKey("v1", ["a"])).not.toBe(await batchIdempotencyKey("v2", ["a"]));
   });
-  it("decodifica chave pública de 32 bytes em base64 ou hex", () => {
-    const bytes = Uint8Array.from({ length: 32 }, (_, i) => i);
-    expect(decodePublicKey(Buffer.from(bytes).toString("base64"))).toEqual(bytes);
-    expect(decodePublicKey(Buffer.from(bytes).toString("hex"))).toEqual(bytes);
-    expect(decodePublicKey("curta")).toBeNull();
-    expect(decodePublicKey(undefined)).toBeNull();
+  it("o envelope RSA-OAEP + AES-GCM abre com a chave privada e leva ação e corpo", async () => {
+    const kp = await crypto.subtle.generateKey(
+      { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["encrypt", "decrypt"],
+    );
+    const spki = new Uint8Array(await crypto.subtle.exportKey("spki", kp.publicKey));
+    const b64 = Buffer.from(spki).toString("base64");
+    expect(parseSpkiPublicKey(b64)).toEqual(spki);
+    expect(parseSpkiPublicKey(`-----BEGIN PUBLIC KEY-----\n${b64}\n-----END PUBLIC KEY-----`)).toEqual(spki);
+    expect(parseSpkiPublicKey("")).toBeNull();
+
+    const plain = sealedPlaintext("entries", { posUnitId: "u", savedAt: "2026-11-17T17:00:00.000Z" });
+    const env = await sealEnvelope(plain, spki);
+    expect(env).not.toContain("posUnitId");
+    const [v, w, iv, ct] = env.split(".");
+    expect(v).toBe("v1");
+    const un = (t: string) => Buffer.from(t.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+    const raw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, kp.privateKey, un(w!));
+    expect(raw.byteLength).toBe(32);
+    const aes = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
+    expect(un(iv!).length).toBe(12);
+    const out = await crypto.subtle.decrypt({ name: "AES-GCM", iv: un(iv!) }, aes, un(ct!));
+    expect(JSON.parse(new TextDecoder().decode(out))).toEqual({ action: "entries", body: { posUnitId: "u", savedAt: "2026-11-17T17:00:00.000Z" } });
   });
-  it("texto cifrado leva caminho e corpo", () => {
-    expect(JSON.parse(sealedPlaintext("entries", { a: 1 }))).toEqual({ v: 1, path: "entries", body: { a: 1 } });
+  it("texto cifrado leva ação e corpo", () => {
+    expect(JSON.parse(sealedPlaintext("entries", { a: 1 }))).toEqual({ action: "entries", body: { a: 1 } });
   });
   it("mensagens ao terapeuta não falam em clínica, prontuário ou paciente", () => {
     for (const c of ["bad_request", "unauthorized", "not_found", "day_closed", "not_arrived", "series_closed", "conflict", "outro"]) {

@@ -65,7 +65,7 @@ grant execute on function fa_config_set_employee_sector(uuid, text) to authentic
 create table if not exists fa_kiosk_playground_eval_receipts (
   id uuid primary key default gen_random_uuid(),
   unit_id uuid not null references fa_kiosk_units (id),
-  clinic_visit_id text not null,
+  clinic_visit_id text,                     -- vazio nos envios que saíram da fila (a fila só guarda o envelope)
   kind text not null,                       -- arrive | leave | entries | conclude
   evaluator_employee_id uuid references fa_kiosk_employees (id),
   device_id text,
@@ -84,10 +84,10 @@ revoke all on fa_kiosk_playground_eval_receipts from anon;
 revoke insert, update, delete on fa_kiosk_playground_eval_receipts from authenticated;
 
 -- ---------------------------------------------------------------------
--- 4. Fila de reenvio. payload_sealed é um sealed box (libsodium) com a chave
---    pública da clínica: o PDV não consegue ler. Os ids ao lado (visita, autor,
---    aparelho) são só para gerar o recibo depois; não há nome nem resposta.
---    Sem policy: nenhum acesso de cliente.
+-- 4. Fila de reenvio. payload_sealed é um envelope híbrido (RSA-OAEP + AES-GCM,
+--    "v1.<chave>.<iv>.<dados>") com a chave pública da clínica: o PDV não consegue
+--    ler. Em claro só ficam a ação e a chave de idempotência. Sem policy: nenhum
+--    acesso de cliente.
 -- ---------------------------------------------------------------------
 create table if not exists fa_kiosk_playground_eval_outbox (
   id uuid primary key default gen_random_uuid(),
@@ -98,10 +98,7 @@ create table if not exists fa_kiosk_playground_eval_outbox (
   attempts integer not null default 0,
   next_attempt_at_ms bigint not null,
   last_error text,
-  created_at_ms bigint not null default (extract(epoch from now()) * 1000)::bigint,
-  clinic_visit_id text,
-  evaluator_employee_id uuid,
-  device_id text
+  created_at_ms bigint not null default (extract(epoch from now()) * 1000)::bigint
 );
 create index if not exists idx_fa_playground_outbox_due on fa_kiosk_playground_eval_outbox (next_attempt_at_ms);
 
