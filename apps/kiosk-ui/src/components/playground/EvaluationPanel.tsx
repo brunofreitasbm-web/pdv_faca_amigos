@@ -14,7 +14,10 @@ import {
   loadDraft,
   FREE_AUTHOR_SPECIALTIES,
   isValidFreeAuthor,
+  loadCommitted,
   loadFreeAuthor,
+  lockedItemIds,
+  saveCommitted,
   loadLastTherapist,
   saveFreeAuthor,
   type FreeAuthor,
@@ -103,6 +106,9 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
 
   const items = series?.items ?? [];
   const serverByItem = useMemo(() => new Map(items.map((i) => [i.itemId, i])), [items]);
+  // Marcação de visita anterior ou já salva pelo botão Salvar: só leitura.
+  const [committed, setCommitted] = useState<Set<string>>(() => loadCommitted(visit.visitId));
+  const locked = useMemo(() => lockedItemIds(items, visit.visitNo, committed), [items, visit.visitNo, committed]);
 
   // ---- envio ----------------------------------------------------------
   const sendRef = useRef<(items: Map<string, Pending>) => Promise<void>>(async () => {});
@@ -224,7 +230,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
   }
 
   function setScore(itemId: string, score: 0 | 1 | 2 | null) {
-    if (!author) return;
+    if (!author || locked.has(itemId)) return;
     setOverrides((o) => ({ ...o, [itemId]: { score, authorName: author.name, authorSpecialty: author.specialty } }));
     batcher.put(itemId, { score, key: newEntryKey(visit.visitId, itemId), savedAt: new Date().toISOString() });
     setSaveState("idle");
@@ -263,7 +269,15 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
       await send(pending, evo);
     } catch {
       /* estado já mostrado */
+      return;
     }
+    // Salvou: tudo que está marcado nesta visita passa a ser só leitura.
+    const ids = new Set(committed);
+    for (const id of pending.keys()) ids.add(id);
+    for (const [id, o] of Object.entries(overrides)) if (o.score !== null) ids.add(id);
+    for (const i of items) if (i.visitNo === visit.visitNo) ids.add(i.itemId);
+    saveCommitted(visit.visitId, ids);
+    setCommitted(ids);
   }
 
   async function conclude() {
@@ -294,7 +308,11 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
     }
   }
 
-  const nothingToSave = dirty === 0 && !evoText.trim();
+  const markedIds = new Set<string>();
+  for (const [id, o] of Object.entries(overrides)) if (o.score !== null) markedIds.add(id);
+  for (const i of items) if (i.visitNo === visit.visitNo) markedIds.add(i.itemId);
+  const unsavedMarks = [...markedIds].filter((id) => !committed.has(id) && !locked.has(id)).length;
+  const nothingToSave = dirty === 0 && !evoText.trim() && unsavedMarks === 0;
   const previousEvolutions = (series?.evolutions ?? []).filter((e) => e.visitId === visit.visitId);
 
   return (
@@ -437,8 +455,13 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists: re
                       return (
                         <div key={item.id} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                           <div style={{ fontSize: "15px" }}>{item.description}</div>
-                          <ScoreSegmented value={value} disabled={!author} label={item.description} onChange={(s) => setScore(item.id, s)} />
-                          {value !== null && by && <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Marcado por {by}</div>}
+                          <ScoreSegmented value={value} disabled={!author || locked.has(item.id)} label={item.description} onChange={(s) => setScore(item.id, s)} />
+                          {value !== null && (by || locked.has(item.id)) && (
+                            <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                              {locked.has(item.id) ? "🔒 Salvo" : "Marcado"}
+                              {by ? ` por ${by}` : ""}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
