@@ -13,6 +13,7 @@ import { BonificacaoTab } from "./tabs/BonificacaoTab.js";
 import { ColaboradoresTab } from "./tabs/ColaboradoresTab.js";
 import { OcorrenciasTab } from "./tabs/OcorrenciasTab.js";
 import { PermissoesTab } from "./tabs/PermissoesTab.js";
+import { AparelhosTab } from "./tabs/AparelhosTab.js";
 import { GerencialRelatorioTab } from "./tabs/GerencialRelatorioTab.js";
 import { FolhaPagamentoTab } from "./tabs/FolhaPagamentoTab.js";
 import { PassagemTurnoTab } from "./tabs/PassagemTurnoTab.js";
@@ -53,6 +54,7 @@ export type GerencialTab =
   | "COLABORADORES"
   | "OCORRENCIAS"
   | "PERMISSOES"
+  | "APARELHOS"
   | "CLIENTES"
   | "CRM_WHATSAPP"
   | "ANIVERSARIO_CORTESIA"
@@ -141,6 +143,7 @@ const CATEGORIES: ModuleCategory[] = [
       { value: "ANIVERSARIO_CORTESIA", label: "Cortesia de aniversário", icon: "🎂", tag: "Novo", description: "30 min grátis no Playground: quem recebeu, quem usou, minutos adicionais cobrados, quem comprou depois e a comparação com o grupo de controle." },
       { value: "RELATORIOS_SESSAO", label: "Olhar FaçaAmigos", icon: "📝", tag: "Novo", description: "Mapa de observação de cada visita de 1h+, quem preencheu, prazo de 40 min e a mensagem enviada ao responsável." },
       { value: "PERMISSOES", label: "Permissões de Acesso", icon: "🔒", description: "Nível de acesso (Operador, Líder ou Owner) exigido por ação." },
+      { value: "APARELHOS", label: "Aparelhos", icon: "📱", tag: "Novo", description: "Cadastro dos terminais, navegadores e celulares que podem abrir a tela de PIN." },
     ],
   },
   {
@@ -487,6 +490,7 @@ export function GerencialApp({ onExit, onLogout }: { onExit: () => void; onLogou
               {tab === "COLABORADORES" && <ColaboradoresTab />}
               {tab === "OCORRENCIAS" && <OcorrenciasTab />}
               {tab === "PERMISSOES" && <PermissoesTab />}
+              {tab === "APARELHOS" && <AparelhosTab />}
               {tab === "CLIENTES" && <ClientesTab />}
               {tab === "CRM_WHATSAPP" && <CrmWhatsappTab />}
               {tab === "ANIVERSARIO_CORTESIA" && <AniversarioCortesiaTab />}

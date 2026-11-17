@@ -16,6 +16,11 @@ interface Window {
     checkForUpdates: () => Promise<{ status: string; version?: string; progress?: number; error?: string }>;
     saveTerminalKey: (key: string) => Promise<{ ok: boolean; error?: string }>;
     applyUpdate: () => Promise<void>;
+    deviceToken?: {
+      get: () => Promise<string | null>;
+      set: (token: string) => Promise<void>;
+      clear: () => Promise<void>;
+    };
     onUpdateStatusChange: (
       callback: (data: { status: string; version?: string; progress?: number; error?: string }) => void
     ) => () => void;

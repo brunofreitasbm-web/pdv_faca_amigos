@@ -27,6 +27,11 @@ verify_jwt = false
 [functions.list-employees]
 verify_jwt = false
 
+# Cadastro de aparelho: anônima por necessidade (o aparelho novo ainda não tem
+# sessão). Protegida por código de uso único, expiração e trava por IP.
+[functions.device-enroll]
+verify_jwt = false
+
 # Link de convite individual: a pessoa ainda não tem conta/sessão nenhuma
 # quando abre o link e preenche o próprio cadastro — mesma razão do
 # login-pin acima. A autorização real é o token do convite, conferido no

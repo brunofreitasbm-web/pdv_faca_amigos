@@ -13,6 +13,8 @@ segredo aparece aqui, só onde está e o que fazer. Apague cada item ao concluir
 - [ ] Dizer de quem são as funções `biofit_*` (executáveis por anon, sem guarda, não pertencem a nenhum dos 5 repos).
 - [ ] Fazer deploy de `delete-job-applications`.
 
+- [ ] Aparelhos da unidade: depois de ativar todos os terminais e celulares, ligar `DEVICE_GATE_ENFORCE=true` (ver `SECURITY.md`). Sem isso o gate não bloqueia nada.
+
 ## Onda 2 (muda comportamento, aprovar item a item)
 
 - [ ] `fa_checkout`: falta limite inferior em `p_closed_at_ms` (o cliente pode fechar a sessão no horário do check-in e não pagar o tempo).

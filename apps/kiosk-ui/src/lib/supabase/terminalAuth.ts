@@ -1,5 +1,6 @@
 import { supabase } from "./client.js";
 import { markSessionStarted } from "./sessionExpiry.js";
+import { clearDeviceToken, deviceHeaders, isDeviceRejected } from "./deviceToken.js";
 
 /**
  * Login por PIN — a única forma de autenticação de colaborador no
@@ -70,7 +71,12 @@ export async function pinLogin(
 ): Promise<TerminalEmployee> {
   const { data, error } = await supabase().functions.invoke<LoginPinResponse>("login-pin", {
     body: { employeeId, pin, context },
+    headers: deviceHeaders(),
   });
+  if (error && (await isDeviceRejected(error))) {
+    await clearDeviceToken();
+    throw new Error("Aparelho não autorizado. Ative-o novamente com um código do Owner.");
+  }
   if (error || !data?.tokenHash) throw new Error("PIN incorreto");
 
   const { data: verifyData, error: verifyError } = await supabase().auth.verifyOtp({

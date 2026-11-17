@@ -1,4 +1,5 @@
 import { fiscalDocsPorPedido } from "../lib/fiscalDocsPorPedido.js";
+import { clearDeviceToken, deviceHeaders, isDeviceRejected, setDeviceToken } from "../lib/supabase/deviceToken.js";
 import { quoteForSession, normalizeCpf, normalizePhoneE164 } from "@facaamigos/domain";
 import type { EmployeeSectorOption as EmployeeSector, SessionReportAnswers, PaperConsumptionSample } from "@facaamigos/domain";
 import { supabase } from "../lib/supabase/client.js";
@@ -2048,7 +2049,50 @@ export interface CrmTemplate {
   variable_count: number;
 }
 
+export interface KioskDevice {
+  id: string;
+  unit_id: string;
+  label: string;
+  created_at_ms: number;
+  last_seen_ms: number | null;
+  revoked_at_ms: number | null;
+}
+
+async function deviceAdminCall<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase().functions.invoke<T>("device-admin", { body });
+  if (error || !data) throw new Error("Não foi possível concluir a ação em aparelhos");
+  return data;
+}
+
 export const Api = {
+  /** Ativa ESTE aparelho com o código do Owner; guarda o token e libera a tela de PIN. */
+  enrollDevice: async (code: string): Promise<{ unitId: string; label: string }> => {
+    const { data, error } = await supabase().functions.invoke<{ token: string; unitId: string; label: string; error?: string }>(
+      "device-enroll",
+      { body: { code } },
+    );
+    if (error || !data?.token) {
+      let msg = "Código inválido ou expirado";
+      const ctx = (error as { context?: unknown } | null)?.context;
+      if (ctx instanceof Response) {
+        try {
+          const b = (await ctx.clone().json()) as { error?: string };
+          if (b.error) msg = b.error;
+        } catch {
+          // mantém a mensagem padrão
+        }
+      }
+      throw new Error(msg);
+    }
+    await setDeviceToken(data.token);
+    return { unitId: data.unitId, label: data.label };
+  },
+  devicesList: async () => (await deviceAdminCall<{ devices: KioskDevice[] }>({ action: "list" })).devices,
+  deviceCreateCode: (unitId: string, label: string) =>
+    deviceAdminCall<{ code: string; expiresAtMs: number }>({ action: "create_code", unitId, label }),
+  deviceRevoke: (deviceId: string) => deviceAdminCall<{ ok: true }>({ action: "revoke", deviceId }),
+  deviceRename: (deviceId: string, label: string) => deviceAdminCall<{ ok: true }>({ action: "rename", deviceId, label }),
+
   /** Unidade amarrada a ESTE computador (Configurações > Impressoras > Este terminal). */
   terminalUnit: () => getTerminalUnit(),
   setTerminalUnit: (unitId: string) => setTerminalUnit(unitId),
@@ -4093,7 +4137,11 @@ export const Api = {
   employeesForLogin: async (): Promise<{ id: string; full_name: string }[]> => {
     const { data, error } = await supabase().functions.invoke<{
       employees: { id: string; full_name: string }[];
-    }>("list-employees", { body: {} });
+    }>("list-employees", { body: {}, headers: deviceHeaders() });
+    if (error && (await isDeviceRejected(error))) {
+      await clearDeviceToken();
+      throw new Error("Aparelho não autorizado. Ative-o novamente com um código do Owner.");
+    }
     if (error) {
       console.error("[api] list-employees falhou:", error, error?.context);
       let detail = error instanceof Error ? error.message : String(error);
