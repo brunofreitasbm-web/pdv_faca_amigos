@@ -2,6 +2,7 @@ import { fiscalDocsPorPedido } from "../lib/fiscalDocsPorPedido.js";
 import { quoteForSession, normalizeCpf, normalizePhoneE164 } from "@facaamigos/domain";
 import type { EmployeeSectorOption as EmployeeSector, SessionReportAnswers, PaperConsumptionSample } from "@facaamigos/domain";
 import { supabase } from "../lib/supabase/client.js";
+import { PlaygroundEvalError } from "../lib/playgroundEval.js";
 import { callResilient } from "../lib/supabase/offlineQueue.js";
 import { computeWorkedMinutes, monthRangeMs, type PontoKind } from "../lib/ponto.js";
 import { assertValidDocumentUpload, assertValidImageUpload, prepareUpload, uploadFileName } from "../lib/imageCompression.js";
@@ -3914,6 +3915,22 @@ export const Api = {
     unwrap(supabase().rpc("fa_config_set_employee_role", { p_employee_id: id, p_role: role })),
   setEmployeeSector: (id: string, sector: EmployeeSector | null) =>
     unwrap(supabase().rpc("fa_config_set_employee_sector", { p_employee_id: id, p_sector: sector })),
+
+  // ── Avaliações no playground (edge function playground-eval-bridge) ──
+  // A unidade que seguimos mandando é só a ESCOLHA do operador entre as unidades
+  // dele: a função resolve a unidade pelo cadastro do usuário e recusa o resto.
+  playgroundEval: async <T>(action: string, body: Record<string, unknown> = {}): Promise<T> => {
+    const { data, error } = await supabase().functions.invoke("playground-eval-bridge", { body: { action, ...body } });
+    if (error) {
+      const ctx = (error as { context?: unknown }).context;
+      if (ctx instanceof Response) {
+        const parsed = (await ctx.clone().json().catch(() => null)) as { code?: string; error?: string } | null;
+        throw new PlaygroundEvalError(parsed?.error ?? "Não foi possível salvar agora. Tente de novo.", parsed?.code ?? "error");
+      }
+      throw new PlaygroundEvalError("Sem conexão: salvo neste aparelho, tente de novo.", "offline", true);
+    }
+    return data as T;
+  },
 
   // ── Olhar FaçaAmigos (planos >= 1h; internamente relatorio_sessao) ──
   sessionReportsPending: (unitId: string) =>

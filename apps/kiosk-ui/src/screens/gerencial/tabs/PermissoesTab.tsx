@@ -33,6 +33,7 @@ const GROUP_LABEL: Record<string, string> = {
   bonificacao: "Bonificação",
   crm: "CRM WhatsApp",
   relatorio_sessao: "Olhar FaçaAmigos",
+  avaliacao_playground: "Avaliação no playground",
 };
 
 function groupOf(capability: string): string {

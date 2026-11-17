@@ -19,7 +19,7 @@ import { MobilePedidosTempo } from "./MobilePedidosTempo.js";
 import { MobileNavBar, MobileTabBar, TabIcons } from "./MobileNav.js";
 import "./mobile.css";
 
-export type EscapeScreen = "ENTRADA" | "SAIDA" | "PAINEL" | "RELATORIO_SESSAO" | "CAIXA" | "PDV" | "MINHA_BONIFICACAO" | "RELATORIO" | "CONFIGURACOES";
+export type EscapeScreen = "ENTRADA" | "SAIDA" | "PAINEL" | "RELATORIO_SESSAO" | "AVALIACOES" | "CAIXA" | "PDV" | "MINHA_BONIFICACAO" | "RELATORIO" | "CONFIGURACOES";
 
 type Tab = "TURNO" | "PAINEL" | "MAIS";
 type View = Tab | "CHECKIN" | "PEDIDOS";
@@ -227,6 +227,7 @@ function MobileMais({
     { screen: "ENTRADA", titulo: "Entrada completa", ajuda: "criança nova, cupom, pacote, carrinho, contrato", show: can("sessao.checkin"), grupo: "ATENDIMENTO" },
     { screen: "SAIDA", titulo: "Saída", ajuda: "cobrar o excedente, emitir nota e liberar", show: can("sessao.checkout"), grupo: "ATENDIMENTO" },
     { screen: "RELATORIO_SESSAO", titulo: "Olhar FaçaAmigos", ajuda: "mapa de observação e registro pro responsável", show: can("relatorio_sessao.write"), grupo: "ATENDIMENTO" },
+    { screen: "AVALIACOES", titulo: "Avaliações", ajuda: "chegada, saída e avaliação das crianças do playground", show: can("avaliacao_playground.write"), grupo: "ATENDIMENTO" },
     { screen: "PDV", titulo: "PDV", ajuda: "vender produto avulso", show: can("pdv.sell"), grupo: "ATENDIMENTO" },
     { screen: "CAIXA", titulo: "Caixa", ajuda: "abrir turno, sangria, fechar", show: can("caixa.open_close"), grupo: "GESTAO" },
     { screen: "MINHA_BONIFICACAO", titulo: "Minha Bonificação", ajuda: "seu ticket médio e o acumulado do mês, só seu", show: can("bonificacao.self"), grupo: "GESTAO" },
