@@ -20,7 +20,8 @@ import { jsonResponse, preflight } from "../_shared/http.ts";
 import { requireCapability } from "../_shared/requireCapability.ts";
 
 const CONTRACT_TYPES = ["CLT", "ESTAGIO", "AUTONOMO"];
-const ROLES = ["ESTAGIARIO", "OPERADOR", "GERENTE", "ADMIN"];
+const ROLES = ["ESTAGIARIO", "OPERADOR", "GERENTE", "ADMIN", "AVALIADOR"];
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const PIN_PATTERN = /^\d{6}$/;
 const CPF_PATTERN = /^\d{11}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -29,13 +30,13 @@ const PHONE_PATTERN = /^\d{10,11}$/;
 interface CreateEmployeeBody {
   fullName: string;
   role: string;
-  cpf: string;
-  email: string;
-  phone: string;
+  cpf?: string;
+  email?: string;
+  phone?: string;
   pin: string;
-  birthDate: string;
-  admissionDate: string;
-  position: string;
+  birthDate?: string;
+  admissionDate?: string;
+  position?: string;
   contractType: string;
   weeklyHoursContracted: number;
 }
@@ -60,17 +61,26 @@ Deno.serve(async (req) => {
     return jsonResponse(req, { error: "corpo inválido" }, 400);
   }
 
-  if (!body.fullName || !body.cpf || !body.email || !body.phone || !body.birthDate || !body.admissionDate || !body.position) {
-    return jsonResponse(req, { error: "preencha nome, CPF, e-mail, telefone, data de nascimento, admissão e cargo" }, 400);
+  // Obrigatórios: nome, permissão e PIN (a tela diz o mesmo). CPF, e-mail, telefone,
+  // nascimento, admissão e cargo são opcionais (as colunas aceitam nulo): só validam o
+  // formato quando vêm preenchidos. Login de aparelho (Avaliador) não tem esses dados.
+  if (typeof body.fullName !== "string" || body.fullName.trim().length < 2) {
+    return jsonResponse(req, { error: "informe o nome do colaborador" }, 400);
   }
-  if (!CPF_PATTERN.test(body.cpf.replace(/\D/g, ""))) {
+  const cpf = (body.cpf ?? "").replace(/\D/g, "");
+  const email = (body.email ?? "").trim();
+  const phone = (body.phone ?? "").replace(/\D/g, "");
+  if (cpf && !CPF_PATTERN.test(cpf)) {
     return jsonResponse(req, { error: "CPF precisa ter 11 dígitos" }, 400);
   }
-  if (!EMAIL_PATTERN.test(body.email.trim())) {
+  if (email && !EMAIL_PATTERN.test(email)) {
     return jsonResponse(req, { error: "e-mail inválido" }, 400);
   }
-  if (!PHONE_PATTERN.test(body.phone.replace(/\D/g, ""))) {
+  if (phone && !PHONE_PATTERN.test(phone)) {
     return jsonResponse(req, { error: "telefone precisa ter 10 ou 11 dígitos (com DDD)" }, 400);
+  }
+  for (const d of [body.birthDate, body.admissionDate]) {
+    if (d && !DATE_PATTERN.test(d)) return jsonResponse(req, { error: "data inválida" }, 400);
   }
   if (!ROLES.includes(body.role)) return jsonResponse(req, { error: "papel inválido" }, 400);
   if (!CONTRACT_TYPES.includes(body.contractType)) {
@@ -100,15 +110,15 @@ Deno.serve(async (req) => {
     .from("fa_kiosk_employees")
     .insert({
       auth_user_id: createdUser.user.id,
-      full_name: body.fullName,
+      full_name: body.fullName.trim(),
       role: body.role,
-      cpf: body.cpf.replace(/\D/g, ""),
-      cpf_last4: body.cpf.replace(/\D/g, "").slice(-4),
-      email: body.email.trim().toLowerCase(),
-      phone: body.phone.replace(/\D/g, ""),
-      birth_date: body.birthDate,
-      admission_date: body.admissionDate,
-      position: body.position,
+      cpf: cpf || null,
+      cpf_last4: cpf ? cpf.slice(-4) : null,
+      email: email ? email.toLowerCase() : null,
+      phone: phone || null,
+      birth_date: body.birthDate || null,
+      admission_date: body.admissionDate || null,
+      position: body.position?.trim() || null,
       contract_type: body.contractType,
       weekly_hours_contracted: body.weeklyHoursContracted,
     })
