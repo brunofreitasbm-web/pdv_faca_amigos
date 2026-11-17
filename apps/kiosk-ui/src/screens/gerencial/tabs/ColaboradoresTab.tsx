@@ -7,7 +7,7 @@ import { useAppState } from "../../../state/AppState.js";
 import { useToast } from "../../../state/ToastContext.js";
 import { ROLE_LABEL, ROLE_DESCRIPTION, ROLE_OPTIONS, type Role } from "../../../auth/capabilities.js";
 import { UnitCheckboxGroup } from "../UnitCheckboxGroup.js";
-import { dateBrFromIso, EMPLOYEE_SECTORS, EMPLOYEE_SECTOR_LABEL, type EmployeeSector } from "@facaamigos/domain";
+import { dateBrFromIso, EMPLOYEE_SECTOR_OPTIONS, EMPLOYEE_SECTOR_OPTION_LABEL, type EmployeeSectorOption as EmployeeSector } from "@facaamigos/domain";
 import { getPublicAppUrl } from "../../../lib/appUrl.js";
 import { Emoji3D, renderEmoji } from "../../../components/Emoji3D.js";
 
@@ -278,7 +278,7 @@ export function ColaboradoresTab() {
     if (next === (emp.sector ?? null)) return;
     try {
       await Api.setEmployeeSector(emp.id, next);
-      toast.success(next ? `${emp.full_name} agora atua em ${EMPLOYEE_SECTOR_LABEL[next]}.` : `${emp.full_name} ficou sem setor.`);
+      toast.success(next ? `${emp.full_name} agora atua em ${EMPLOYEE_SECTOR_OPTION_LABEL[next]}.` : `${emp.full_name} ficou sem setor.`);
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível alterar o setor");
@@ -727,7 +727,7 @@ export function ColaboradoresTab() {
                     </div>
                     <div style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "2px" }}>
                       Permissão: {ROLE_LABEL[e.role]}
-                      {e.sector ? ` · Setor: ${EMPLOYEE_SECTOR_LABEL[e.sector]}` : ""}
+                      {e.sector ? ` · Setor: ${EMPLOYEE_SECTOR_OPTION_LABEL[e.sector]}` : ""}
                       {e.cpf ? ` · CPF: ${e.cpf}` : ""}
                       {e.phone ? ` · Tel: ${e.phone}` : ""}
                       {e.admission_date ? ` · Admitido: ${dateBrFromIso(e.admission_date)}` : ""}
@@ -758,15 +758,15 @@ export function ColaboradoresTab() {
                   <div style={{ flex: "1 1 140px", minWidth: 0 }}>
                   <Select
                     aria-label={`Setor de ${e.full_name}`}
-                    title="Setor de atuação: define qual bloco do Olhar FaçaAmigos abre primeiro para este colaborador"
+                    title="Setor de atuação: identifica a especialidade de quem preenche o Olhar FaçaAmigos e a Avaliação do playground"
                     value={e.sector ?? ""}
                     onChange={(ev) => void changeSector(e, (ev.target.value || null) as EmployeeSector | null)}
                     style={{ minWidth: "120px", fontSize: "13px" }}
                   >
                     <option value="">Sem setor</option>
-                    {EMPLOYEE_SECTORS.map((s) => (
+                    {EMPLOYEE_SECTOR_OPTIONS.map((s) => (
                       <option key={s} value={s}>
-                        {EMPLOYEE_SECTOR_LABEL[s]}
+                        {EMPLOYEE_SECTOR_OPTION_LABEL[s]}
                       </option>
                     ))}
                   </Select>

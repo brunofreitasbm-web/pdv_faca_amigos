@@ -1,6 +1,6 @@
 import { fiscalDocsPorPedido } from "../lib/fiscalDocsPorPedido.js";
 import { quoteForSession, normalizeCpf, normalizePhoneE164 } from "@facaamigos/domain";
-import type { EmployeeSector, SessionReportAnswers, PaperConsumptionSample } from "@facaamigos/domain";
+import type { EmployeeSectorOption as EmployeeSector, SessionReportAnswers, PaperConsumptionSample } from "@facaamigos/domain";
 import { supabase } from "../lib/supabase/client.js";
 import { callResilient } from "../lib/supabase/offlineQueue.js";
 import { computeWorkedMinutes, monthRangeMs, type PontoKind } from "../lib/ponto.js";
