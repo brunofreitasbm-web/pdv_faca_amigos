@@ -22,7 +22,9 @@
 //    A ação `flush` reenvia com backoff exponencial.
 //  - A transcrição NÃO entra na fila.
 //
-// Secrets: CLINIC_URL, CLINIC_BRIDGE_SECRET, PLAYGROUND_BRIDGE_PUBLIC_KEY.
+// Configuração: CLINIC_URL, CLINIC_BRIDGE_SECRET, PLAYGROUND_BRIDGE_PUBLIC_KEY. Vêm do
+// Vault do banco (fa_playground_bridge_config) e, se não houver valor lá, dos secrets
+// da função.
 //
 // Fila cifrada: envelope híbrido RSA-OAEP + AES-GCM (WebCrypto) com a chave pública
 // da clínica (SPKI em PLAYGROUND_BRIDGE_PUBLIC_KEY). Só o envelope e a ação ficam em
@@ -75,12 +77,38 @@ interface ClinicResult {
 }
 
 // ---------------------------------------------------------------------
+// Configuração (CLINIC_URL, CLINIC_BRIDGE_SECRET, PLAYGROUND_BRIDGE_PUBLIC_KEY)
+// ---------------------------------------------------------------------
+
+const CONFIG_TTL_MS = 60_000;
+const configCache = new Map<string, { value: string; at: number }>();
+let serviceClient: SupabaseClient | null = null;
+
+/**
+ * Lê a configuração da ponte. Primeiro o Vault do banco, pela RPC
+ * fa_playground_bridge_config (só a service role executa); se não houver valor lá,
+ * a variável de ambiente da função. O Vault vem primeiro para que um valor antigo
+ * esquecido nos secrets da função nunca sobreponha o vigente. Cache curto: trocar
+ * o segredo vale em até 1 minuto.
+ */
+async function getConfig(name: string): Promise<string | null> {
+  const hit = configCache.get(name);
+  if (hit && Date.now() - hit.at < CONFIG_TTL_MS) return hit.value;
+  serviceClient ??= createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data, error } = await serviceClient.rpc("fa_playground_bridge_config", { p_name: name });
+  if (error) console.error("[playground-bridge] config do Vault falhou", name, error.message);
+  const value = typeof data === "string" && data.length > 0 ? data : (Deno.env.get(name) ?? null);
+  if (value) configCache.set(name, { value, at: Date.now() });
+  return value;
+}
+
+// ---------------------------------------------------------------------
 // Clínica
 // ---------------------------------------------------------------------
 
 async function callClinic(path: string, body: unknown, timeoutMs = CALL_TIMEOUT_MS): Promise<ClinicResult> {
-  const base = (Deno.env.get("CLINIC_URL") ?? "").replace(/\/+$/, "");
-  const secret = Deno.env.get("CLINIC_BRIDGE_SECRET");
+  const base = ((await getConfig("CLINIC_URL")) ?? "").replace(/\/+$/, "");
+  const secret = await getConfig("CLINIC_BRIDGE_SECRET");
   if (!base || !secret) {
     console.error("[playground-bridge] CLINIC_URL/CLINIC_BRIDGE_SECRET não configurados");
     return { status: 0, json: null };
@@ -191,7 +219,7 @@ async function resolveAuthor(admin: Admin, unitId: string, authorEmployeeId: unk
 // ---------------------------------------------------------------------
 
 async function seal(plaintext: string): Promise<string | null> {
-  const pk = parseSpkiPublicKey(Deno.env.get("PLAYGROUND_BRIDGE_PUBLIC_KEY"));
+  const pk = parseSpkiPublicKey(await getConfig("PLAYGROUND_BRIDGE_PUBLIC_KEY"));
   if (!pk) {
     console.error("[playground-bridge] PLAYGROUND_BRIDGE_PUBLIC_KEY ausente ou inválida");
     return null;
