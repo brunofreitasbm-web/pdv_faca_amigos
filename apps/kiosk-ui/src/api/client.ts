@@ -206,7 +206,7 @@ export interface JobApplication {
 export interface Employee {
   id: string;
   full_name: string;
-  role: "ESTAGIARIO" | "OPERADOR" | "GERENTE" | "ADMIN" | "PRESTADOR_PJ";
+  role: "ESTAGIARIO" | "OPERADOR" | "GERENTE" | "ADMIN" | "PRESTADOR_PJ" | "AVALIADOR";
   cpf?: string | null;
   email?: string | null;
   phone?: string | null;

@@ -101,7 +101,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
 };
 
 /** Papéis como estão no banco. Ver ROLE_LABEL para o que o usuário lê. */
-export type Role = "ESTAGIARIO" | "OPERADOR" | "GERENTE" | "ADMIN" | "PRESTADOR_PJ";
+export type Role = "ESTAGIARIO" | "OPERADOR" | "GERENTE" | "ADMIN" | "PRESTADOR_PJ" | "AVALIADOR";
 
 /**
  * Os valores no banco continuam OPERADOR/GERENTE/ADMIN — renomeá-los
@@ -118,11 +118,13 @@ export const ROLE_LABEL: Record<Role, string> = {
   GERENTE: "Líder",
   ADMIN: "Owner",
   PRESTADOR_PJ: "Prestador PJ",
+  AVALIADOR: "Avaliador",
 };
 
 export const ROLE_DESCRIPTION: Record<Role, string> = {
   ESTAGIARIO: "Só acessa o Controle de Frequência. Não opera caixa, vendas nem check-in/saída.",
   PRESTADOR_PJ: "Só acessa o Registro de Prestação de Serviço (Check-in/Check-out). Sem vínculo empregatício CLT.",
+  AVALIADOR: "Login do tablet do playground: só a aba Avaliações. Nada mais aparece.",
   OPERADOR: "Caixa, vendas, troca de planos e Configurações.",
   GERENTE: "Tudo do Operador, mais sangrias, estornos e relatórios.",
   ADMIN: "Acesso total, incluindo cancelamento de sessões.",
@@ -134,7 +136,7 @@ export const ROLE_DESCRIPTION: Record<Role, string> = {
  * (Recepção, Vendedor, Líder de Turno...) desacoplado do RBAC — o único
  * nível concedido é a própria permissão.
  */
-export const ROLE_OPTIONS: ReadonlyArray<Role> = ["OPERADOR", "GERENTE", "ADMIN", "ESTAGIARIO", "PRESTADOR_PJ"];
+export const ROLE_OPTIONS: ReadonlyArray<Role> = ["OPERADOR", "GERENTE", "ADMIN", "ESTAGIARIO", "PRESTADOR_PJ", "AVALIADOR"];
 
 /**
  * Retorna o conjunto de capacidades padrão para um papel de colaborador.
@@ -188,6 +190,10 @@ export function getDefaultCapabilitiesForRole(role: Role): Set<Capability> {
 
   if (role === "ESTAGIARIO") {
     return new Set(["ponto.self", "bonificacao.self", "relatorio_sessao.write", "avaliacao_playground.write", "chat.usar"]);
+  }
+
+  if (role === "AVALIADOR") {
+    return new Set(["avaliacao_playground.write"]);
   }
 
   if (role === "PRESTADOR_PJ") {

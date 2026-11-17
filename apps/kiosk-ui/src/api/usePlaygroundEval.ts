@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { Api } from "./client.js";
 import { startVisiblePolling } from "../lib/visiblePolling.js";
-import { badgeCount, badgeIsUrgent, PlaygroundEvalError, type PlaygroundToday } from "../lib/playgroundEval.js";
+import { badgeBlinks, badgeCount, badgeIsUrgent, badgeTotal, PlaygroundEvalError, type PlaygroundToday } from "../lib/playgroundEval.js";
 
 const POLL_MS = 60_000;
 
@@ -90,5 +90,13 @@ export function usePlaygroundBadge(unitId: string | null, enabled = true) {
   const { data } = usePlaygroundEval(unitId, enabled);
   const visits = data?.visits ?? [];
   const pending = data?.pendingConclusions;
-  return { count: badgeCount(visits, pending), urgent: badgeIsUrgent(visits, pending) };
+  const total = badgeTotal(visits);
+  const attention = badgeCount(visits, pending);
+  // Conclusão pendente é de visitas de dias anteriores: sem agendadas hoje, o selo mostra quantas faltam concluir.
+  return {
+    count: total > 0 ? total : (pending?.length ?? 0),
+    attention,
+    blink: badgeBlinks(visits, pending),
+    urgent: badgeIsUrgent(visits, pending),
+  };
 }

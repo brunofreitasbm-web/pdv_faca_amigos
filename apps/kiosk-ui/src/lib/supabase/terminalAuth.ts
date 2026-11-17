@@ -21,7 +21,7 @@ const STORAGE_KEY = "fa_kiosk_terminal_employees";
 interface CachedEmployee {
   employeeId: string;
   fullName: string;
-  role: "ESTAGIARIO" | "OPERADOR" | "GERENTE" | "ADMIN" | "PRESTADOR_PJ";
+  role: "ESTAGIARIO" | "OPERADOR" | "GERENTE" | "ADMIN" | "PRESTADOR_PJ" | "AVALIADOR";
   contract_type?: "CLT" | "ESTAGIO" | "AUTONOMO" | "PJ" | null;
 }
 
@@ -29,7 +29,7 @@ interface CachedEmployee {
 export interface TerminalEmployee {
   id: string;
   full_name: string;
-  role: "ESTAGIARIO" | "OPERADOR" | "GERENTE" | "ADMIN" | "PRESTADOR_PJ";
+  role: "ESTAGIARIO" | "OPERADOR" | "GERENTE" | "ADMIN" | "PRESTADOR_PJ" | "AVALIADOR";
   contract_type?: "CLT" | "ESTAGIO" | "AUTONOMO" | "PJ" | null;
 }
 

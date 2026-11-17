@@ -46,6 +46,7 @@ import {
   clampClientInstant,
   friendlyErrorMessage,
   isValidId,
+  parseFreeAuthor,
   resolveUnit,
   parseSpkiPublicKey,
   sealEnvelope,
@@ -212,6 +213,22 @@ async function listTherapists(admin: Admin, unitId: string): Promise<Therapist[]
 async function resolveAuthor(admin: Admin, unitId: string, authorEmployeeId: unknown): Promise<Therapist | null> {
   if (!isValidId(authorEmployeeId)) return null;
   return (await listTherapists(admin, unitId)).find((t) => t.id === authorEmployeeId) ?? null;
+}
+
+/** Tablet do avaliador (papel AVALIADOR): nome e especialidade digitados, sem cadastro de colaborador. */
+function freeAuthorFor(caller: { employeeId: string; role: string }, raw: unknown): Therapist | null {
+  if (caller.role !== "AVALIADOR") return null;
+  const a = parseFreeAuthor(raw);
+  return a ? { id: caller.employeeId, name: a.name, specialty: a.specialty } : null;
+}
+
+async function authorFor(
+  admin: Admin,
+  caller: { employeeId: string; role: string; unitId: string },
+  input: Record<string, unknown>,
+): Promise<Therapist | null> {
+  if (caller.role === "AVALIADOR") return freeAuthorFor(caller, input.authorFree);
+  return resolveAuthor(admin, caller.unitId, input.authorEmployeeId);
 }
 
 // ---------------------------------------------------------------------
@@ -412,8 +429,9 @@ Deno.serve(async (req) => {
       if (classifyClinicStatus(res.status) !== "ok") {
         return err(req, 503, "unavailable", "Sem conexão: mostrando a última lista carregada.");
       }
-      const therapists = await listTherapists(admin, caller.unitId);
-      return jsonResponse(req, { ...(res.json ?? {}), ok: true, therapists });
+      const freeAuthor = caller.role === "AVALIADOR";
+      const therapists = freeAuthor ? [] : await listTherapists(admin, caller.unitId);
+      return jsonResponse(req, { ...(res.json ?? {}), ok: true, therapists, freeAuthor });
     }
 
     case "arrive":
@@ -435,8 +453,10 @@ Deno.serve(async (req) => {
 
     case "entries": {
       if (!isValidId(input.visitId)) return err(req, 400, "bad_request", "Visita inválida.");
-      const author = await resolveAuthor(admin, caller.unitId, input.authorEmployeeId);
-      if (!author) return err(req, 400, "bad_request", "Escolha quem está avaliando.");
+      const author = await authorFor(admin, caller, input);
+      if (!author) {
+        return err(req, 400, "bad_request", caller.role === "AVALIADOR" ? "Informe seu nome e sua especialidade." : "Escolha quem está avaliando.");
+      }
       const v = validateEntries(input.entries, nowMs);
       if (!v.ok) return err(req, 400, "bad_request", v.error);
       const visitId = input.visitId;
@@ -464,8 +484,10 @@ Deno.serve(async (req) => {
 
     case "conclude": {
       if (!isValidId(input.visitId)) return err(req, 400, "bad_request", "Visita inválida.");
-      const author = await resolveAuthor(admin, caller.unitId, input.authorEmployeeId);
-      if (!author) return err(req, 400, "bad_request", "Escolha quem está avaliando.");
+      const author = await authorFor(admin, caller, input);
+      if (!author) {
+        return err(req, 400, "bad_request", caller.role === "AVALIADOR" ? "Informe seu nome e sua especialidade." : "Escolha quem está avaliando.");
+      }
       const visitId = input.visitId;
       const idempotencyKey = `conclude:${visitId}`;
       return sendOrQueue(req, admin, caller, {

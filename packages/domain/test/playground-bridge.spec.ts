@@ -1,6 +1,8 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  FREE_AUTHOR_SPECIALTIES,
+  parseFreeAuthor,
   BACKOFF_CAP_MS,
   backoffMs,
   batchIdempotencyKey,
@@ -162,5 +164,22 @@ describe("setor Fisioterapia e o Olhar", () => {
     expect(sectorHasOlharItems("PSICOLOGIA")).toBe(true);
     expect(sessionReportProgress({}).total).toBe(16);
     expect(summarizeAnswersBySector({})).toEqual([]);
+  });
+});
+
+describe("identidade livre do tablet do avaliador", () => {
+  it("aceita nome digitado + especialidade da lista e limpa espaços e caracteres de controle", () => {
+    expect(parseFreeAuthor({ name: "  Ana   Souza\n", specialty: "Psicólogo(a)" })).toEqual({ name: "Ana Souza", specialty: "Psicólogo(a)" });
+  });
+  it("recusa nome curto, nome longo, especialidade fora da lista e entrada inválida", () => {
+    expect(parseFreeAuthor({ name: "A", specialty: "Psicólogo(a)" })).toBeNull();
+    expect(parseFreeAuthor({ name: "x".repeat(81), specialty: "Psicólogo(a)" })).toBeNull();
+    expect(parseFreeAuthor({ name: "Ana", specialty: "Médico" })).toBeNull();
+    expect(parseFreeAuthor(null)).toBeNull();
+    expect(parseFreeAuthor({ name: 5, specialty: "Outro" })).toBeNull();
+  });
+  it("a lista de especialidades do tablet é igual à do kiosk-ui", async () => {
+    const ui = await import("../../../apps/kiosk-ui/src/lib/playgroundEval.ts");
+    expect([...ui.FREE_AUTHOR_SPECIALTIES]).toEqual([...FREE_AUTHOR_SPECIALTIES]);
   });
 });

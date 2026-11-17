@@ -110,6 +110,32 @@ export function sectorLabel(sector: string | null | undefined): string | null {
   return (EMPLOYEE_SECTOR_OPTION_LABEL as Record<string, string>)[sector as EmployeeSectorOption] ?? null;
 }
 
+/** Especialidades que o avaliador do tablet escolhe na lista. Igual a FREE_AUTHOR_SPECIALTIES do kiosk-ui (playgroundEval.ts). */
+export const FREE_AUTHOR_SPECIALTIES = [
+  "Psicólogo(a)",
+  "Terapeuta Ocupacional",
+  "Educador(a) Físico(a)",
+  "Pedagogo(a)",
+  "Fisioterapeuta",
+  "Fonoaudiólogo(a)",
+  "Outro",
+] as const;
+
+/**
+ * Identidade digitada no tablet do avaliador: nome livre + especialidade da lista.
+ * Devolve null se faltar algo ou se a especialidade não estiver na lista.
+ */
+export function parseFreeAuthor(raw: unknown): { name: string; specialty: string } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.name !== "string" || typeof r.specialty !== "string") return null;
+  // eslint-disable-next-line no-control-regex
+  const name = r.name.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  if (name.length < 2 || name.length > 80) return null;
+  if (!(FREE_AUTHOR_SPECIALTIES as readonly string[]).includes(r.specialty)) return null;
+  return { name, specialty: r.specialty };
+}
+
 export type UnitResolution = { ok: true; unitId: string } | { ok: false; error: string };
 
 /**

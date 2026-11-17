@@ -12,7 +12,12 @@ import {
   firstName,
   formatCountdown,
   loadDraft,
+  FREE_AUTHOR_SPECIALTIES,
+  isValidFreeAuthor,
+  loadFreeAuthor,
   loadLastTherapist,
+  saveFreeAuthor,
+  type FreeAuthor,
   newEntryKey,
   otherAuthorLabel,
   saveDraft,
@@ -40,26 +45,45 @@ const SAVE_TEXT: Record<SaveState, string> = {
   error: "Não foi possível salvar: tente de novo",
 };
 
+const FREE_ID = "livre";
+
 interface Props {
   unitId: string;
   visit: PlaygroundVisit;
   domains: CatalogDomain[];
   series: SeriesState | undefined;
   therapists: Therapist[];
+  /** Tablet do avaliador: nome digitado + especialidade da lista, em vez de escolher um colaborador. */
+  freeAuthor?: boolean;
   onClose: () => void;
   /** Releitura da lista depois de salvar. */
   onSaved: () => void;
 }
 
 /** Painel lateral da avaliação: terapeuta, itens por domínio, evolução e o botão "Salvar como". */
-export function EvaluationPanel({ unitId, visit, domains, series, therapists, onClose, onSaved }: Props) {
+export function EvaluationPanel({ unitId, visit, domains, series, therapists: registeredTherapists, freeAuthor = false, onClose, onSaved }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
 
   const initialDraft = useMemo<LocalDraft>(() => loadDraft(visit.visitId), [visit.visitId]);
   const draftRef = useRef<LocalDraft>(initialDraft);
 
+  // Avaliador do tablet: confirma nome e especialidade com OK; um rascunho já salvo neste aparelho reaproveita a última identidade.
+  const [freeForm, setFreeForm] = useState<FreeAuthor>(() => loadFreeAuthor(unitId) ?? { name: "", specialty: "" });
+  const [freeConfirmed, setFreeConfirmed] = useState<boolean>(
+    () => freeAuthor && initialDraft.authorId === FREE_ID && loadFreeAuthor(unitId) !== null,
+  );
+  const therapists = useMemo<Therapist[]>(
+    () => (freeAuthor ? (freeConfirmed ? [{ id: FREE_ID, name: freeForm.name.replace(/\s+/g, " ").trim(), specialty: freeForm.specialty }] : []) : registeredTherapists),
+    [freeAuthor, freeConfirmed, freeForm, registeredTherapists],
+  );
+  const freeRef = useRef<FreeAuthor | null>(null);
+  freeRef.current = freeAuthor && freeConfirmed ? { name: freeForm.name.replace(/\s+/g, " ").trim(), specialty: freeForm.specialty } : null;
+  /** Autor no envio: o colaborador escolhido, ou o nome digitado no tablet do avaliador. */
+  const authorFields = () => (freeAuthor ? { authorFree: freeRef.current } : { authorEmployeeId: authorRef.current });
+
   const [authorId, setAuthorId] = useState<string | null>(() => {
+    if (freeAuthor) return freeConfirmed ? FREE_ID : null;
     if (initialDraft.authorId && therapists.some((t) => t.id === initialDraft.authorId)) return initialDraft.authorId;
     const last = loadLastTherapist(unitId);
     return last && therapists.some((t) => t.id === last) ? last : null;
@@ -121,7 +145,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists, on
           unitId,
           visitId: visit.visitId,
           deviceId: (await Api.deviceId()) ?? "navegador",
-          authorEmployeeId,
+          ...authorFields(),
           entries,
         });
         // Confirmado (ou guardado para reenvio): sai do rascunho local o que foi enviado.
@@ -175,6 +199,22 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists, on
   useEffect(() => () => batcher.flushNow(), [batcher]);
 
   // ---- ações ----------------------------------------------------------
+  function confirmFreeAuthor() {
+    if (!isValidFreeAuthor(freeForm)) return;
+    saveFreeAuthor(unitId, { name: freeForm.name.replace(/\s+/g, " ").trim(), specialty: freeForm.specialty });
+    setFreeConfirmed(true);
+    setAuthorId(FREE_ID);
+    authorRef.current = FREE_ID;
+    freeRef.current = { name: freeForm.name.replace(/\s+/g, " ").trim(), specialty: freeForm.specialty };
+  }
+
+  function changeFreeAuthor() {
+    batcher.flushNow(); // o que já estava marcado sai no nome de quem marcou
+    setFreeConfirmed(false);
+    setAuthorId(null);
+    authorRef.current = null;
+  }
+
   function chooseTherapist(t: Therapist) {
     if (t.id === authorRef.current) return;
     batcher.flushNow(); // o que já estava marcado sai no nome de quem marcou
@@ -243,7 +283,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists, on
         unitId,
         visitId: visit.visitId,
         deviceId: (await Api.deviceId()) ?? "navegador",
-        authorEmployeeId: author.id,
+        ...authorFields(),
         savedAt: new Date().toISOString(),
       });
       toast.success("Avaliação concluída");
@@ -296,7 +336,52 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists, on
           {/* Quem está avaliando */}
           <section aria-label="Quem está avaliando">
             <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "6px" }}>Quem está avaliando</div>
-            {therapists.length === 0 ? (
+            {freeAuthor ? (
+              freeConfirmed ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700 }}>
+                    {firstName(freeForm.name)} <span style={{ fontWeight: 500, color: "var(--text-muted)" }}>· {freeForm.specialty}</span>
+                  </div>
+                  <button type="button" onClick={changeFreeAuthor} style={{ minHeight: "44px", padding: "6px 14px", borderRadius: "999px", border: "1px solid var(--border-subtle)", background: "var(--surface-card)", fontFamily: "inherit", fontSize: "14px", cursor: "pointer" }}>
+                    Trocar
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+                  <input
+                    aria-label="Seu nome"
+                    placeholder="Seu nome"
+                    value={freeForm.name}
+                    maxLength={80}
+                    onChange={(e) => setFreeForm((f) => ({ ...f, name: e.target.value }))}
+                    style={{ minHeight: "48px", padding: "6px 14px", borderRadius: "10px", border: "1px solid var(--border-subtle)", fontFamily: "inherit", fontSize: "16px", flex: "1 1 180px" }}
+                  />
+                  <select
+                    aria-label="Especialidade"
+                    value={freeForm.specialty}
+                    onChange={(e) => setFreeForm((f) => ({ ...f, specialty: e.target.value }))}
+                    style={{ minHeight: "48px", padding: "6px 10px", borderRadius: "10px", border: "1px solid var(--border-subtle)", fontFamily: "inherit", fontSize: "16px" }}
+                  >
+                    <option value="" disabled>
+                      Especialidade
+                    </option>
+                    {FREE_AUTHOR_SPECIALTIES.map((sp) => (
+                      <option key={sp} value={sp}>
+                        {sp}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!isValidFreeAuthor(freeForm)}
+                    onClick={confirmFreeAuthor}
+                    style={{ minHeight: "48px", padding: "6px 22px", borderRadius: "999px", border: "none", background: "var(--color-primary)", color: "#fff", fontFamily: "inherit", fontSize: "16px", fontWeight: 700, cursor: "pointer", opacity: isValidFreeAuthor(freeForm) ? 1 : 0.5 }}
+                  >
+                    OK
+                  </button>
+                </div>
+              )
+            ) : therapists.length === 0 ? (
               <div style={{ fontSize: "14px", color: "var(--text-muted)" }}>Nenhum profissional cadastrado para esta unidade: peça ao responsável para cadastrar.</div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -369,7 +454,7 @@ export function EvaluationPanel({ unitId, visit, domains, series, therapists, on
               </section>
             );
           })}
-          {!author && therapists.length > 0 && <div style={{ fontSize: "14px", color: "var(--text-muted)" }}>Escolha quem está avaliando para marcar os itens.</div>}
+          {!author && (therapists.length > 0 || freeAuthor) && <div style={{ fontSize: "14px", color: "var(--text-muted)" }}>{freeAuthor ? "Informe seu nome e especialidade e toque em OK para marcar os itens." : "Escolha quem está avaliando para marcar os itens."}</div>}
 
           {/* Evolução */}
           <section aria-label="Evolução" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

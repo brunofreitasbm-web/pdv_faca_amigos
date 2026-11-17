@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  badgeBlinks,
   badgeCount,
+  badgeTotal,
   badgeIsUrgent,
   canOpenEvaluation,
   createBatcher,
@@ -46,6 +48,13 @@ describe("selo da navegação", () => {
     expect(badgeCount(vs, [])).toBe(3);
     expect(badgeCount(vs, [{ seriesId: "x", displayName: "Ana", ageLabel: "6 anos", lastVisitStart: "" }])).toBe(4);
     expect(badgeCount([], undefined)).toBe(0);
+  });
+  it("total do selo é o dia inteiro (sem canceladas) e pisca só com ação pendente", () => {
+    expect(badgeTotal(vs)).toBe(5);
+    expect(badgeTotal([visit("a", "cancelada"), visit("b", "futura")])).toBe(1);
+    expect(badgeBlinks([visit("a", "futura"), visit("b", "registrada_no_prazo")], [])).toBe(false);
+    expect(badgeBlinks(vs, [])).toBe(true);
+    expect(badgeBlinks([], [{ seriesId: "x", displayName: "A", ageLabel: "", lastVisitStart: "" }])).toBe(true);
   });
   it("fica vermelho com atrasada ou conclusão pendente", () => {
     expect(badgeIsUrgent([visit("a", "avaliar_agora")], [])).toBe(false);
