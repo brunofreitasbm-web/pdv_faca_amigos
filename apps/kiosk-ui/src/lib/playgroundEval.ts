@@ -342,3 +342,38 @@ export function newEntryKey(visitId: string, suffix: string): string {
   const rand = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
   return `${visitId.slice(0, 12)}:${suffix.slice(0, 12)}:${Date.now().toString(36)}${rand}`;
 }
+
+// ---------------------------------------------------------------------
+// Trava das marcações
+//
+// Marcação de visita anterior fica só para leitura. Na visita atual, o autosave
+// continua mandando como rascunho; a marcação só trava quando o profissional
+// toca em "Salvar como ...". Esses ids ficam guardados neste aparelho.
+// ---------------------------------------------------------------------
+const committedKey = (visitId: string) => `fa-playground-committed-${visitId}`;
+
+export function loadCommitted(visitId: string, storage?: Pick<Storage, "getItem">): Set<string> {
+  try {
+    const raw = (storage ?? localStorage).getItem(committedKey(visitId));
+    const v = raw ? (JSON.parse(raw) as unknown) : null;
+    if (Array.isArray(v)) return new Set(v.filter((x): x is string => typeof x === "string"));
+  } catch {
+    /* sem memória: nada travado por aqui */
+  }
+  return new Set();
+}
+
+export function saveCommitted(visitId: string, ids: Iterable<string>, storage?: Pick<Storage, "setItem">): void {
+  try {
+    (storage ?? localStorage).setItem(committedKey(visitId), JSON.stringify([...ids]));
+  } catch {
+    /* sem memória do que já foi salvo */
+  }
+}
+
+/** Itens que não podem mais ser alterados: de visita anterior, ou já salvos nesta visita pelo botão Salvar. */
+export function lockedItemIds(items: ReadonlyArray<Pick<SeriesItemState, "itemId" | "visitNo">>, visitNo: number, committed: ReadonlySet<string>): Set<string> {
+  const locked = new Set<string>();
+  for (const i of items) if (i.visitNo < visitNo || committed.has(i.itemId)) locked.add(i.itemId);
+  return locked;
+}

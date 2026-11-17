@@ -9,7 +9,10 @@ import {
   emptyDraft,
   formatCountdown,
   isFixedTabletUser,
+  loadCommitted,
   loadDraft,
+  lockedItemIds,
+  saveCommitted,
   loadLastTherapist,
   newlyOverdue,
   otherAuthorLabel,
@@ -168,5 +171,30 @@ describe("armazenamento local com falha", () => {
     expect(mem.size).toBe(0);
     saveLastTherapist("u", "t9", st);
     expect(loadLastTherapist("u", st)).toBe("t9");
+  });
+});
+
+describe("trava das marcações", () => {
+  const it0 = (itemId: string, visitNo: number) => ({ itemId, visitNo });
+
+  it("trava item de visita anterior, mesmo sem ter sido salvo aqui", () => {
+    const locked = lockedItemIds([it0("a", 1), it0("b", 2)], 2, new Set());
+    expect([...locked]).toEqual(["a"]);
+  });
+
+  it("item da visita atual só trava depois do Salvar", () => {
+    expect(lockedItemIds([it0("b", 2)], 2, new Set()).size).toBe(0);
+    expect(lockedItemIds([it0("b", 2)], 2, new Set(["b"])).has("b")).toBe(true);
+  });
+
+  it("guarda e relê o que já foi salvo, sem quebrar se o armazenamento falhar", () => {
+    const mem = new Map<string, string>();
+    const st = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+    saveCommitted("v1", ["a", "b"], st);
+    expect([...loadCommitted("v1", st)].sort()).toEqual(["a", "b"]);
+    expect(loadCommitted("v2", st).size).toBe(0);
+    const broken = { getItem: () => { throw new Error("x"); }, setItem: () => { throw new Error("x"); } };
+    expect(() => saveCommitted("v1", ["a"], broken)).not.toThrow();
+    expect(loadCommitted("v1", broken).size).toBe(0);
   });
 });
