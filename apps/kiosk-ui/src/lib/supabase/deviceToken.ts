@@ -138,3 +138,16 @@ export function useDeviceEnrollMode(): DeviceEnrollMode {
     () => (required && cached === null ? "required" : manual ? "manual" : "none"),
   );
 }
+
+/** Token atual como estado reativo (muda ao ativar/revogar o aparelho). */
+export function useDeviceToken(): string | null {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+    () => cached,
+  );
+}

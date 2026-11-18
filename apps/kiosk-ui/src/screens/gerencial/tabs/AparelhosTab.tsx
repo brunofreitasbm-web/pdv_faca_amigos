@@ -3,6 +3,7 @@ import { HelpText, Button, Input, Select } from "@facaamigos/ui";
 import { Card } from "../GCard.js";
 import { Api } from "../../../api/client.js";
 import type { KioskDevice, Unit } from "../../../api/client.js";
+import { shortDeviceCode } from "../../../lib/deviceCode.js";
 
 function fmt(ms: number | null) {
   return ms ? new Date(ms).toLocaleString("pt-BR") : "nunca";
@@ -96,7 +97,7 @@ export function AparelhosTab() {
         {devices.map((d) => (
           <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 0", borderTop: "1px solid var(--border, #eee)", opacity: d.revoked_at_ms ? 0.5 : 1 }}>
             <div>
-              <strong>{d.label}</strong> · {unitName(d.unit_id)}
+              <strong>{d.label}</strong> · {unitName(d.unit_id)} · #{shortDeviceCode(d.id)}
               <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                 Ativado {fmt(d.created_at_ms)} · último uso {fmt(d.last_seen_ms)}
                 {d.revoked_at_ms ? ` · revogado ${fmt(d.revoked_at_ms)}` : ""}
