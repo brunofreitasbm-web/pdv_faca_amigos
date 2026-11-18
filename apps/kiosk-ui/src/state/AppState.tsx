@@ -31,6 +31,24 @@ interface AppStateValue {
 
 const AppStateContext = createContext<AppStateValue | null>(null);
 
+/** Papéis que só enxergam a(s) unidade(s) em que estão alocados (fa_kiosk_employee_units). */
+function isUnitRestrictedRole(role: TerminalEmployee["role"]): boolean {
+  return role === "OPERADOR" || role === "AVALIADOR";
+}
+
+/**
+ * Unidades que o colaborador pode ver. Operador sem vínculo gravado cai na
+ * primeira unidade (comportamento legado). Avaliador sem vínculo não vê
+ * nenhuma: é um tablet fixo de uma unidade, e vazar as outras era o bug.
+ */
+async function resolveVisibleUnits(employee: TerminalEmployee, allUnits: Unit[]): Promise<Unit[]> {
+  if (!isUnitRestrictedRole(employee.role)) return allUnits;
+  const myIds: string[] = await Api.myUnitIds(employee.id).catch(() => []);
+  const assigned = allUnits.filter((u) => myIds.includes(u.id));
+  if (assigned.length > 0) return assigned;
+  return employee.role === "AVALIADOR" ? [] : allUnits.slice(0, 1);
+}
+
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [unitId, setUnitId] = useState<string | null>(null);
@@ -57,19 +75,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const allUnits = await Api.units();
         if (isCancelled) return;
 
-        if (employee?.role === "OPERADOR") {
-          const myIds: string[] = await Api.myUnitIds(employee.id).catch(() => []);
-          if (isCancelled) return;
-          const assigned = allUnits.filter((u) => myIds.includes(u.id));
-          if (assigned.length > 0) {
-            setUnits(assigned);
-          } else {
-            // Se for operador sem vinculo especifico gravado, limita a 1 unidade
-            setUnits(allUnits.slice(0, 1));
-          }
-        } else {
-          setUnits(allUnits);
-        }
+        const visible = await resolveVisibleUnits(employee!, allUnits);
+        if (isCancelled) return;
+        setUnits(visible);
       } catch {
         if (!isCancelled) setUnits([]);
       }
@@ -100,7 +108,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (employee.role === "OPERADOR" && units.length > 0) {
+        if (isUnitRestrictedRole(employee.role) && units.length > 0) {
           autoSelectedForEmployeeId.current = employee.id;
           setUnitId(units[0]!.id);
           return;
@@ -118,7 +126,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (isCancelled) return;
-        if (employee.role === "OPERADOR" && units.length > 0) {
+        if (isUnitRestrictedRole(employee.role) && units.length > 0) {
           autoSelectedForEmployeeId.current = employee.id;
           setUnitId(units[0]!.id);
           return;
@@ -225,13 +233,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (!employee) return;
     try {
       const allUnits = await Api.units();
-      if (employee.role === "OPERADOR") {
-        const myIds: string[] = await Api.myUnitIds(employee.id).catch(() => []);
-        const assigned = allUnits.filter((u) => myIds.includes(u.id));
-        setUnits(assigned.length > 0 ? assigned : allUnits.slice(0, 1));
-      } else {
-        setUnits(allUnits);
-      }
+      setUnits(await resolveVisibleUnits(employee, allUnits));
     } catch (err) {
       console.error("Erro ao recarregar unidades:", err);
     }
