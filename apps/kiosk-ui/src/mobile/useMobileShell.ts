@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useAppState } from "../state/AppState.js";
 
 const PHONE_MAX_WIDTH = 640;
 
@@ -38,7 +39,19 @@ export interface MobileShellState {
   useMobileVersion: () => void;
 }
 
+/**
+ * A casca mobile mostra receita do dia, ocupação e "Trocar de unidade". O
+ * Avaliador é o login do tablet fixo do playground: só a aba Avaliações, nada
+ * financeiro. Um tablet pequeno ou em pé cai na regra de celular acima, então
+ * o papel precisa excluir a casca por conta própria, qualquer que seja o aparelho.
+ */
+export function mobileShellAllowedFor(role: string | null | undefined): boolean {
+  return role !== "AVALIADOR";
+}
+
 export function useMobileShell(): MobileShellState {
+  const { employee } = useAppState();
+  const allowed = mobileShellAllowedFor(employee?.role);
   const [isPhone, setIsPhone] = useState(isMobileDevice);
 
   useEffect(() => {
@@ -60,5 +73,5 @@ export function useMobileShell(): MobileShellState {
     setIsPhone(true);
   }, []);
 
-  return { active: isPhone, isPhone, useFullVersion, useMobileVersion };
+  return { active: isPhone && allowed, isPhone, useFullVersion, useMobileVersion };
 }
