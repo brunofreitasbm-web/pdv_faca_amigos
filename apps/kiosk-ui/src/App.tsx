@@ -23,6 +23,7 @@ import { useSessionReportFailureAlerts } from "./hooks/useSessionReportFailureAl
 import { useAppState } from "./state/AppState.js";
 import { closeDeviceEnroll, openDeviceEnroll, useDeviceEnrollMode } from "./lib/supabase/deviceToken.js";
 import { DeviceEnrollScreen } from "./screens/DeviceEnrollScreen.js";
+import { DeviceIdentityBadge } from "./components/DeviceIdentityBadge.js";
 import { useConfirm } from "./state/ConfirmContext.js";
 import { useAuth } from "./auth/AuthContext.js";
 import { RequireCapability } from "./auth/RequireCapability.js";
@@ -380,27 +381,39 @@ export function App() {
       <>
         {mobile.active ? <MobileLogin /> : <LoginScreen />}
         {/* Fora da lista de PIN de propósito: aparece em todas as etapas do login. */}
-        <button
-          type="button"
-          onClick={openDeviceEnroll}
+        <div
           style={{
             position: "fixed",
-            left: "50%",
+            left: 0,
+            right: 0,
             bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
-            transform: "translateX(-50%)",
-            background: "none",
-            border: "none",
-            font: "inherit",
-            fontSize: 12,
-            fontWeight: 700,
-            color: "var(--text-muted, #6C7682)",
-            textDecoration: "underline",
-            cursor: "pointer",
-            padding: "8px 12px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 0,
+            pointerEvents: "none",
           }}
         >
-          Ativar este aparelho
-        </button>
+          <DeviceIdentityBadge />
+          <button
+            type="button"
+            onClick={openDeviceEnroll}
+            style={{
+              background: "none",
+              border: "none",
+              font: "inherit",
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--text-muted, #6C7682)",
+              textDecoration: "underline",
+              cursor: "pointer",
+              padding: "8px 12px",
+              pointerEvents: "auto",
+            }}
+          >
+            Ativar este aparelho
+          </button>
+        </div>
       </>
     );
   }

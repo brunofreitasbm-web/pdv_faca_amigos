@@ -1,5 +1,5 @@
 import { fiscalDocsPorPedido } from "../lib/fiscalDocsPorPedido.js";
-import { clearDeviceToken, deviceHeaders, isDeviceRejected, setDeviceToken } from "../lib/supabase/deviceToken.js";
+import { clearDeviceToken, deviceHeaders, getDeviceToken, isDeviceRejected, setDeviceToken } from "../lib/supabase/deviceToken.js";
 import { quoteForSession, normalizeCpf, normalizePhoneE164 } from "@facaamigos/domain";
 import type { EmployeeSectorOption as EmployeeSector, SessionReportAnswers, PaperConsumptionSample } from "@facaamigos/domain";
 import { supabase } from "../lib/supabase/client.js";
@@ -2049,6 +2049,13 @@ export interface CrmTemplate {
   variable_count: number;
 }
 
+export interface DeviceIdentity {
+  id: string;
+  label: string;
+  unitId: string;
+  unitName: string | null;
+}
+
 export interface KioskDevice {
   id: string;
   unit_id: string;
@@ -2086,6 +2093,20 @@ export const Api = {
     }
     await setDeviceToken(data.token);
     return { unitId: data.unitId, label: data.label };
+  },
+  /** Nome, unidade e id do aparelho a que ESTE token pertence; null se não ativado/revogado/sem rede. */
+  deviceIdentity: async (): Promise<DeviceIdentity | null> => {
+    if (!getDeviceToken()) return null;
+    try {
+      const { data, error } = await supabase().functions.invoke<{ device: DeviceIdentity | null }>("device-whoami", {
+        body: {},
+        headers: deviceHeaders(),
+      });
+      if (error) return null;
+      return data?.device ?? null;
+    } catch {
+      return null;
+    }
   },
   devicesList: async () => (await deviceAdminCall<{ devices: KioskDevice[] }>({ action: "list" })).devices,
   deviceCreateCode: (unitId: string, label: string) =>

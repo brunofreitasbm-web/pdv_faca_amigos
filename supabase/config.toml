@@ -32,6 +32,11 @@ verify_jwt = false
 [functions.device-enroll]
 verify_jwt = false
 
+# Identidade do aparelho (nome + unidade) mostrada na tela de login. Anônima
+# porque ainda não há sessão; só responde a um x-device-token válido.
+[functions.device-whoami]
+verify_jwt = false
+
 # Link de convite individual: a pessoa ainda não tem conta/sessão nenhuma
 # quando abre o link e preenche o próprio cadastro — mesma razão do
 # login-pin acima. A autorização real é o token do convite, conferido no
